@@ -153,6 +153,13 @@ use marker::Unsize;
 /// The `Drop` trait is used to run some code when a value goes out of scope.
 /// This is sometimes called a 'destructor'.
 ///
+/// When a value goes out of scope, if it implements this trait, it will have
+/// its `drop` method called. Then any fields the value contains will also
+/// be dropped recursively.
+///
+/// Because of the recursive dropping, you do not need to implement this trait
+/// unless your type needs its own destructor logic.
+///
 /// # Examples
 ///
 /// A trivial implementation of `Drop`. The `drop` method is called when `_x`
@@ -169,6 +176,43 @@ use marker::Unsize;
 ///
 /// fn main() {
 ///     let _x = HasDrop;
+/// }
+/// ```
+///
+/// Showing the recursive nature of `Drop`. When `outer` goes out of scope, the
+/// `drop` method will be called first for `Outer`, then for `Inner`. Therefore
+/// `main` prints `Dropping Outer!` and then `Dropping Inner!`.
+///
+/// ```
+/// struct Inner;
+/// struct Outer(Inner);
+///
+/// impl Drop for Inner {
+///     fn drop(&mut self) {
+///         println!("Dropping Inner!");
+///     }
+/// }
+///
+/// impl Drop for Outer {
+///     fn drop(&mut self) {
+///         println!("Dropping Outer!");
+///     }
+/// }
+///
+/// fn main() {
+///     let _x = Outer(Inner);
+/// }
+/// ```
+///
+/// Because variables are dropped in the reverse order they are declared,
+/// `main` will print `Declared second!` and then `Declared first!`.
+///
+/// ```
+/// struct PrintOnDrop(&'static str);
+///
+/// fn main() {
+///     let _first = PrintOnDrop("Declared first!");
+///     let _second = PrintOnDrop("Declared second!");
 /// }
 /// ```
 #[lang = "drop"]
@@ -2263,7 +2307,7 @@ impl<Idx: PartialOrd<Idx>> RangeTo<Idx> {
 /// ```
 /// #![feature(inclusive_range,inclusive_range_syntax)]
 /// fn main() {
-///     assert_eq!((3...5), std::ops::RangeInclusive::NonEmpty{ start: 3, end: 5 });
+///     assert_eq!((3...5), std::ops::RangeInclusive{ start: 3, end: 5 });
 ///     assert_eq!(3+4+5, (3...5).sum());
 ///
 ///     let arr = [0, 1, 2, 3];
@@ -2273,45 +2317,23 @@ impl<Idx: PartialOrd<Idx>> RangeTo<Idx> {
 /// ```
 #[derive(Clone, PartialEq, Eq, Hash)]  // not Copy -- see #27186
 #[unstable(feature = "inclusive_range", reason = "recently added, follows RFC", issue = "28237")]
-pub enum RangeInclusive<Idx> {
-    /// Empty range (iteration has finished)
+pub struct RangeInclusive<Idx> {
+    /// The lower bound of the range (inclusive).
     #[unstable(feature = "inclusive_range",
                reason = "recently added, follows RFC",
                issue = "28237")]
-    Empty {
-        /// The point at which iteration finished
-        #[unstable(feature = "inclusive_range",
-                   reason = "recently added, follows RFC",
-                   issue = "28237")]
-        at: Idx
-    },
-    /// Non-empty range (iteration will yield value(s))
+    pub start: Idx,
+    /// The upper bound of the range (inclusive).
     #[unstable(feature = "inclusive_range",
                reason = "recently added, follows RFC",
                issue = "28237")]
-    NonEmpty {
-        /// The lower bound of the range (inclusive).
-        #[unstable(feature = "inclusive_range",
-                   reason = "recently added, follows RFC",
-                   issue = "28237")]
-        start: Idx,
-        /// The upper bound of the range (inclusive).
-        #[unstable(feature = "inclusive_range",
-                   reason = "recently added, follows RFC",
-                   issue = "28237")]
-        end: Idx,
-    },
+    pub end: Idx,
 }
 
 #[unstable(feature = "inclusive_range", reason = "recently added, follows RFC", issue = "28237")]
 impl<Idx: fmt::Debug> fmt::Debug for RangeInclusive<Idx> {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        use self::RangeInclusive::*;
-
-        match *self {
-            Empty { ref at } => write!(fmt, "[empty range @ {:?}]", at),
-            NonEmpty { ref start, ref end } => write!(fmt, "{:?}...{:?}", start, end),
-        }
+        write!(fmt, "{:?}...{:?}", self.start, self.end)
     }
 }
 
@@ -2333,9 +2355,7 @@ impl<Idx: PartialOrd<Idx>> RangeInclusive<Idx> {
     /// }
     /// ```
     pub fn contains(&self, item: Idx) -> bool {
-        if let &RangeInclusive::NonEmpty{ref start, ref end} = self {
-            (*start <= item) && (item <= *end)
-        } else { false }
+        self.start <= item && item <= self.end
     }
 }
 
@@ -2890,15 +2910,9 @@ pub trait BoxPlace<Data: ?Sized> : Place<Data> {
     fn make_place() -> Self;
 }
 
-/// A trait for types which have success and error states and are meant to work
-/// with the question mark operator.
-/// When the `?` operator is used with a value, whether the value is in the
-/// success or error state is determined by calling `translate`.
-///
-/// This trait is **very** experimental, it will probably be iterated on heavily
-/// before it is stabilised. Implementors should expect change. Users of `?`
-/// should not rely on any implementations of `Carrier` other than `Result`,
-/// i.e., you should not expect `?` to continue to work with `Option`, etc.
+/// This trait has been superseded by the `Try` trait, but must remain
+/// here as `?` is still lowered to it in stage0 .
+#[cfg(stage0)]
 #[unstable(feature = "question_mark_carrier", issue = "31436")]
 pub trait Carrier {
     /// The type of the value when computation succeeds.
@@ -2917,6 +2931,7 @@ pub trait Carrier {
     fn translate<T>(self) -> T where T: Carrier<Success=Self::Success, Error=Self::Error>;
 }
 
+#[cfg(stage0)]
 #[unstable(feature = "question_mark_carrier", issue = "31436")]
 impl<U, V> Carrier for Result<U, V> {
     type Success = U;
@@ -2942,21 +2957,57 @@ impl<U, V> Carrier for Result<U, V> {
 
 struct _DummyErrorType;
 
-impl Carrier for _DummyErrorType {
-    type Success = ();
+impl Try for _DummyErrorType {
+    type Ok = ();
     type Error = ();
 
-    fn from_success(_: ()) -> _DummyErrorType {
+    fn into_result(self) -> Result<Self::Ok, Self::Error> {
+        Ok(())
+    }
+
+    fn from_ok(_: ()) -> _DummyErrorType {
         _DummyErrorType
     }
 
     fn from_error(_: ()) -> _DummyErrorType {
         _DummyErrorType
     }
+}
 
-    fn translate<T>(self) -> T
-        where T: Carrier<Success=(), Error=()>
-    {
-        T::from_success(())
-    }
+/// A trait for customizing the behaviour of the `?` operator.
+///
+/// A type implementing `Try` is one that has a canonical way to view it
+/// in terms of a success/failure dichotomy.  This trait allows both
+/// extracting those success or failure values from an existing instance and
+/// creating a new instance from a success or failure value.
+#[unstable(feature = "try_trait", issue = "42327")]
+pub trait Try {
+    /// The type of this value when viewed as successful.
+    #[unstable(feature = "try_trait", issue = "42327")]
+    type Ok;
+    /// The type of this value when viewed as failed.
+    #[unstable(feature = "try_trait", issue = "42327")]
+    type Error;
+
+    /// Applies the "?" operator. A return of `Ok(t)` means that the
+    /// execution should continue normally, and the result of `?` is the
+    /// value `t`. A return of `Err(e)` means that execution should branch
+    /// to the innermost enclosing `catch`, or return from the function.
+    ///
+    /// If an `Err(e)` result is returned, the value `e` will be "wrapped"
+    /// in the return type of the enclosing scope (which must itself implement
+    /// `Try`). Specifically, the value `X::from_error(From::from(e))`
+    /// is returned, where `X` is the return type of the enclosing function.
+    #[unstable(feature = "try_trait", issue = "42327")]
+    fn into_result(self) -> Result<Self::Ok, Self::Error>;
+
+    /// Wrap an error value to construct the composite result. For example,
+    /// `Result::Err(x)` and `Result::from_error(x)` are equivalent.
+    #[unstable(feature = "try_trait", issue = "42327")]
+    fn from_error(v: Self::Error) -> Self;
+
+    /// Wrap an OK value to construct the composite result. For example,
+    /// `Result::Ok(x)` and `Result::from_ok(x)` are equivalent.
+    #[unstable(feature = "try_trait", issue = "42327")]
+    fn from_ok(v: Self::Ok) -> Self;
 }
