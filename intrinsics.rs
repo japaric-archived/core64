@@ -564,6 +564,39 @@ extern "rust-intrinsic" {
     pub fn atomic_umax_rel<T>(dst: *mut T, src: T) -> T;
     pub fn atomic_umax_acqrel<T>(dst: *mut T, src: T) -> T;
     pub fn atomic_umax_relaxed<T>(dst: *mut T, src: T) -> T;
+
+    /// The `prefetch` intrinsic is a hint to the code generator to insert a prefetch instruction
+    /// if supported; otherwise, it is a noop.
+    /// Prefetches have no effect on the behavior of the program but can change its performance
+    /// characteristics.
+    ///
+    /// The `locality` argument must be a constant integer and is a temporal locality specifier
+    /// ranging from (0) - no locality, to (3) - extremely local keep in cache
+    pub fn prefetch_read_data<T>(data: *const T, locality: i32);
+    /// The `prefetch` intrinsic is a hint to the code generator to insert a prefetch instruction
+    /// if supported; otherwise, it is a noop.
+    /// Prefetches have no effect on the behavior of the program but can change its performance
+    /// characteristics.
+    ///
+    /// The `locality` argument must be a constant integer and is a temporal locality specifier
+    /// ranging from (0) - no locality, to (3) - extremely local keep in cache
+    pub fn prefetch_write_data<T>(data: *const T, locality: i32);
+    /// The `prefetch` intrinsic is a hint to the code generator to insert a prefetch instruction
+    /// if supported; otherwise, it is a noop.
+    /// Prefetches have no effect on the behavior of the program but can change its performance
+    /// characteristics.
+    ///
+    /// The `locality` argument must be a constant integer and is a temporal locality specifier
+    /// ranging from (0) - no locality, to (3) - extremely local keep in cache
+    pub fn prefetch_read_instruction<T>(data: *const T, locality: i32);
+    /// The `prefetch` intrinsic is a hint to the code generator to insert a prefetch instruction
+    /// if supported; otherwise, it is a noop.
+    /// Prefetches have no effect on the behavior of the program but can change its performance
+    /// characteristics.
+    ///
+    /// The `locality` argument must be a constant integer and is a temporal locality specifier
+    /// ranging from (0) - no locality, to (3) - extremely local keep in cache
+    pub fn prefetch_write_instruction<T>(data: *const T, locality: i32);
 }
 
 extern "rust-intrinsic" {
@@ -594,12 +627,17 @@ extern "rust-intrinsic" {
     pub fn rustc_peek<T>(_: T) -> T;
 
     /// Aborts the execution of the process.
+    ///
+    /// The stabilized version of this intrinsic is
+    /// [`std::process::abort`](../../std/process/fn.abort.html)
     pub fn abort() -> !;
 
-    /// Tells LLVM that this point in the code is not reachable,
-    /// enabling further optimizations.
+    /// Tells LLVM that this point in the code is not reachable, enabling
+    /// further optimizations.
     ///
-    /// NB: This is very different from the `unreachable!()` macro!
+    /// NB: This is very different from the `unreachable!()` macro: Unlike the
+    /// macro, which panics when it is executed, it is *undefined behavior* to
+    /// reach code marked with this function.
     pub fn unreachable() -> !;
 
     /// Informs the optimizer that a condition is always true.
@@ -641,6 +679,10 @@ extern "rust-intrinsic" {
     pub fn min_align_of<T>() -> usize;
     pub fn pref_align_of<T>() -> usize;
 
+    /// The size of the referenced value in bytes.
+    ///
+    /// The stabilized version of this intrinsic is
+    /// [`std::mem::size_of_val`](../../std/mem/fn.size_of_val.html).
     pub fn size_of_val<T: ?Sized>(_: &T) -> usize;
     pub fn min_align_of_val<T: ?Sized>(_: &T) -> usize;
 
@@ -813,12 +855,12 @@ extern "rust-intrinsic" {
     /// // The no-copy, unsafe way, still using transmute, but not UB.
     /// // This is equivalent to the original, but safer, and reuses the
     /// // same Vec internals. Therefore the new inner type must have the
-    /// // exact same size, and the same or lesser alignment, as the old
-    /// // type. The same caveats exist for this method as transmute, for
+    /// // exact same size, and the same alignment, as the old type.
+    /// // The same caveats exist for this method as transmute, for
     /// // the original inner type (`&i32`) to the converted inner type
     /// // (`Option<&i32>`), so read the nomicon pages linked above.
     /// let v_from_raw = unsafe {
-    ///     Vec::from_raw_parts(v_orig.as_mut_ptr(),
+    ///     Vec::from_raw_parts(v_orig.as_mut_ptr() as *mut Option<&i32>,
     ///                         v_orig.len(),
     ///                         v_orig.capacity())
     /// };
@@ -886,6 +928,9 @@ extern "rust-intrinsic" {
     ///
     /// If the actual type neither requires drop glue nor implements
     /// `Copy`, then may return `true` or `false`.
+    ///
+    /// The stabilized version of this intrinsic is
+    /// [`std::mem::needs_drop`](../../std/mem/fn.needs_drop.html).
     pub fn needs_drop<T>() -> bool;
 
     /// Calculates the offset from a pointer.
@@ -1009,20 +1054,23 @@ extern "rust-intrinsic" {
     /// a size of `count` * `size_of::<T>()` and an alignment of
     /// `min_align_of::<T>()`
     ///
-    /// The volatile parameter is set to `true`, so it will not be optimized out.
+    /// The volatile parameter is set to `true`, so it will not be optimized out
+    /// unless size is equal to zero.
     pub fn volatile_copy_nonoverlapping_memory<T>(dst: *mut T, src: *const T,
                                                   count: usize);
     /// Equivalent to the appropriate `llvm.memmove.p0i8.0i8.*` intrinsic, with
     /// a size of `count` * `size_of::<T>()` and an alignment of
     /// `min_align_of::<T>()`
     ///
-    /// The volatile parameter is set to `true`, so it will not be optimized out.
+    /// The volatile parameter is set to `true`, so it will not be optimized out
+    /// unless size is equal to zero..
     pub fn volatile_copy_memory<T>(dst: *mut T, src: *const T, count: usize);
     /// Equivalent to the appropriate `llvm.memset.p0i8.*` intrinsic, with a
     /// size of `count` * `size_of::<T>()` and an alignment of
     /// `min_align_of::<T>()`.
     ///
-    /// The volatile parameter is set to `true`, so it will not be optimized out.
+    /// The volatile parameter is set to `true`, so it will not be optimized out
+    /// unless size is equal to zero.
     pub fn volatile_set_memory<T>(dst: *mut T, val: u8, count: usize);
 
     /// Perform a volatile load from the `src` pointer.
@@ -1182,6 +1230,22 @@ extern "rust-intrinsic" {
     /// ```
     pub fn ctlz<T>(x: T) -> T;
 
+    /// Like `ctlz`, but extra-unsafe as it returns `undef` when
+    /// given an `x` with value `0`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// #![feature(core_intrinsics)]
+    ///
+    /// use std::intrinsics::ctlz_nonzero;
+    ///
+    /// let x = 0b0001_1100_u8;
+    /// let num_leading = unsafe { ctlz_nonzero(x) };
+    /// assert_eq!(num_leading, 3);
+    /// ```
+    pub fn ctlz_nonzero<T>(x: T) -> T;
+
     /// Returns the number of trailing unset bits (zeroes) in an integer type `T`.
     ///
     /// # Examples
@@ -1208,6 +1272,22 @@ extern "rust-intrinsic" {
     /// assert_eq!(num_trailing, 16);
     /// ```
     pub fn cttz<T>(x: T) -> T;
+
+    /// Like `cttz`, but extra-unsafe as it returns `undef` when
+    /// given an `x` with value `0`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// #![feature(core_intrinsics)]
+    ///
+    /// use std::intrinsics::cttz_nonzero;
+    ///
+    /// let x = 0b0011_1000_u8;
+    /// let num_trailing = unsafe { cttz_nonzero(x) };
+    /// assert_eq!(num_trailing, 3);
+    /// ```
+    pub fn cttz_nonzero<T>(x: T) -> T;
 
     /// Reverses the bytes in an integer type `T`.
     pub fn bswap<T>(x: T) -> T;
@@ -1273,4 +1353,38 @@ extern "rust-intrinsic" {
     /// on MSVC it's `*mut [usize; 2]`. For more information see the compiler's
     /// source as well as std's catch implementation.
     pub fn try(f: fn(*mut u8), data: *mut u8, local_ptr: *mut u8) -> i32;
+
+    /// Computes the byte offset that needs to be applied to `ptr` in order to
+    /// make it aligned to `align`.
+    /// If it is not possible to align `ptr`, the implementation returns
+    /// `usize::max_value()`.
+    ///
+    /// There are no guarantees whatsover that offsetting the pointer will not
+    /// overflow or go beyond the allocation that `ptr` points into.
+    /// It is up to the caller to ensure that the returned offset is correct
+    /// in all terms other than alignment.
+    ///
+    /// # Examples
+    ///
+    /// Accessing adjacent `u8` as `u16`
+    ///
+    /// ```
+    /// # #![feature(core_intrinsics)]
+    /// # fn foo(n: usize) {
+    /// # use std::intrinsics::align_offset;
+    /// # use std::mem::align_of;
+    /// # unsafe {
+    /// let x = [5u8, 6u8, 7u8, 8u8, 9u8];
+    /// let ptr = &x[n] as *const u8;
+    /// let offset = align_offset(ptr as *const (), align_of::<u16>());
+    /// if offset < x.len() - n - 1 {
+    ///     let u16_ptr = ptr.offset(offset as isize) as *const u16;
+    ///     assert_ne!(*u16_ptr, 500);
+    /// } else {
+    ///     // while the pointer can be aligned via `offset`, it would point
+    ///     // outside the allocation
+    /// }
+    /// # } }
+    /// ```
+    pub fn align_offset(ptr: *const (), align: usize) -> usize;
 }

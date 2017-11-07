@@ -17,16 +17,11 @@ macro_rules! panic {
         panic!("explicit panic")
     );
     ($msg:expr) => ({
-        static _MSG_FILE_LINE: (&'static str, &'static str, u32) = ($msg, file!(), line!());
-        $crate::panicking::panic(&_MSG_FILE_LINE)
+        $crate::panicking::panic(&($msg, file!(), line!(), __rust_unstable_column!()))
     });
     ($fmt:expr, $($arg:tt)*) => ({
-        // The leading _'s are to avoid dead code warnings if this is
-        // used inside a dead function. Just `#[allow(dead_code)]` is
-        // insufficient, since the user may have
-        // `#[forbid(dead_code)]` and which cannot be overridden.
-        static _FILE_LINE: (&'static str, u32) = (file!(), line!());
-        $crate::panicking::panic_fmt(format_args!($fmt, $($arg)*), &_FILE_LINE)
+        $crate::panicking::panic_fmt(format_args!($fmt, $($arg)*),
+                                     &(file!(), line!(), __rust_unstable_column!()))
     });
 }
 
@@ -34,6 +29,8 @@ macro_rules! panic {
 ///
 /// This will invoke the [`panic!`] macro if the provided expression cannot be
 /// evaluated to `true` at runtime.
+///
+/// # Uses
 ///
 /// Assertions are always checked in both debug and release builds, and cannot
 /// be disabled. See [`debug_assert!`] for assertions that are not enabled in
@@ -45,12 +42,16 @@ macro_rules! panic {
 /// Other use-cases of `assert!` include [testing] and enforcing run-time
 /// invariants in safe code (whose violation cannot result in unsafety).
 ///
-/// This macro has a second version, where a custom panic message can
-/// be provided with or without arguments for formatting.
+/// # Custom Messages
+///
+/// This macro has a second form, where a custom panic message can
+/// be provided with or without arguments for formatting.  See [`std::fmt`]
+/// for syntax for this form.
 ///
 /// [`panic!`]: macro.panic.html
 /// [`debug_assert!`]: macro.debug_assert.html
-/// [testing]: ../book/testing.html
+/// [testing]: ../book/second-edition/ch11-01-writing-tests.html#checking-results-with-the-assert-macro
+/// [`std::fmt`]: ../std/fmt/index.html
 ///
 /// # Examples
 ///
@@ -85,14 +86,15 @@ macro_rules! assert {
     );
 }
 
-/// Asserts that two expressions are equal to each other.
+/// Asserts that two expressions are equal to each other (using [`PartialEq`]).
 ///
 /// On panic, this macro will print the values of the expressions with their
 /// debug representations.
 ///
-/// Like [`assert!`], this macro has a second version, where a custom
+/// Like [`assert!`], this macro has a second form, where a custom
 /// panic message can be provided.
 ///
+/// [`PartialEq`]: cmp/trait.PartialEq.html
 /// [`assert!`]: macro.assert.html
 ///
 /// # Examples
@@ -111,8 +113,9 @@ macro_rules! assert_eq {
         match (&$left, &$right) {
             (left_val, right_val) => {
                 if !(*left_val == *right_val) {
-                    panic!("assertion failed: `(left == right)` \
-                           (left: `{:?}`, right: `{:?}`)", left_val, right_val)
+                    panic!(r#"assertion failed: `(left == right)`
+  left: `{:?}`,
+ right: `{:?}`"#, left_val, right_val)
                 }
             }
         }
@@ -121,8 +124,9 @@ macro_rules! assert_eq {
         match (&($left), &($right)) {
             (left_val, right_val) => {
                 if !(*left_val == *right_val) {
-                    panic!("assertion failed: `(left == right)` \
-                           (left: `{:?}`, right: `{:?}`): {}", left_val, right_val,
+                    panic!(r#"assertion failed: `(left == right)`
+  left: `{:?}`,
+ right: `{:?}`: {}"#, left_val, right_val,
                            format_args!($($arg)+))
                 }
             }
@@ -130,14 +134,15 @@ macro_rules! assert_eq {
     });
 }
 
-/// Asserts that two expressions are not equal to each other.
+/// Asserts that two expressions are not equal to each other (using [`PartialEq`]).
 ///
 /// On panic, this macro will print the values of the expressions with their
 /// debug representations.
 ///
-/// Like `assert!()`, this macro has a second version, where a custom
+/// Like [`assert!`], this macro has a second form, where a custom
 /// panic message can be provided.
 ///
+/// [`PartialEq`]: cmp/trait.PartialEq.html
 /// [`assert!`]: macro.assert.html
 ///
 /// # Examples
@@ -156,8 +161,9 @@ macro_rules! assert_ne {
         match (&$left, &$right) {
             (left_val, right_val) => {
                 if *left_val == *right_val {
-                    panic!("assertion failed: `(left != right)` \
-                           (left: `{:?}`, right: `{:?}`)", left_val, right_val)
+                    panic!(r#"assertion failed: `(left != right)`
+  left: `{:?}`,
+ right: `{:?}`"#, left_val, right_val)
                 }
             }
         }
@@ -166,8 +172,9 @@ macro_rules! assert_ne {
         match (&($left), &($right)) {
             (left_val, right_val) => {
                 if *left_val == *right_val {
-                    panic!("assertion failed: `(left != right)` \
-                           (left: `{:?}`, right: `{:?}`): {}", left_val, right_val,
+                    panic!(r#"assertion failed: `(left != right)`
+  left: `{:?}`,
+ right: `{:?}`: {}"#, left_val, right_val,
                            format_args!($($arg)+))
                 }
             }
@@ -182,6 +189,8 @@ macro_rules! assert_ne {
 ///
 /// Like [`assert!`], this macro also has a second version, where a custom panic
 /// message can be provided.
+///
+/// # Uses
 ///
 /// Unlike [`assert!`], `debug_assert!` statements are only enabled in non
 /// optimized builds by default. An optimized build will omit all
@@ -228,12 +237,14 @@ macro_rules! debug_assert {
 /// On panic, this macro will print the values of the expressions with their
 /// debug representations.
 ///
-/// Unlike `assert_eq!`, `debug_assert_eq!` statements are only enabled in non
+/// Unlike [`assert_eq!`], `debug_assert_eq!` statements are only enabled in non
 /// optimized builds by default. An optimized build will omit all
 /// `debug_assert_eq!` statements unless `-C debug-assertions` is passed to the
 /// compiler. This makes `debug_assert_eq!` useful for checks that are too
 /// expensive to be present in a release build but may be helpful during
 /// development.
+///
+/// [`assert_eq!`]: ../std/macro.assert_eq.html
 ///
 /// # Examples
 ///
@@ -253,12 +264,14 @@ macro_rules! debug_assert_eq {
 /// On panic, this macro will print the values of the expressions with their
 /// debug representations.
 ///
-/// Unlike `assert_ne!`, `debug_assert_ne!` statements are only enabled in non
+/// Unlike [`assert_ne!`], `debug_assert_ne!` statements are only enabled in non
 /// optimized builds by default. An optimized build will omit all
 /// `debug_assert_ne!` statements unless `-C debug-assertions` is passed to the
 /// compiler. This makes `debug_assert_ne!` useful for checks that are too
 /// expensive to be present in a release build but may be helpful during
 /// development.
+///
+/// [`assert_ne!`]: ../std/macro.assert_ne.html
 ///
 /// # Examples
 ///
@@ -276,10 +289,9 @@ macro_rules! debug_assert_ne {
 /// Helper macro for reducing boilerplate code for matching `Result` together
 /// with converting downstream errors.
 ///
-/// Prefer using `?` syntax to `try!`. `?` is built in to the language and is
-/// more succinct than `try!`. It is the standard method for error propagation.
+/// The `?` operator was added to replace `try!` and should be used instead.
 ///
-/// `try!` matches the given `Result`. In case of the `Ok` variant, the
+/// `try!` matches the given [`Result`]. In case of the `Ok` variant, the
 /// expression has the value of the wrapped value.
 ///
 /// In case of the `Err` variant, it retrieves the inner error. `try!` then
@@ -288,7 +300,9 @@ macro_rules! debug_assert_ne {
 /// error is then immediately returned.
 ///
 /// Because of the early return, `try!` can only be used in functions that
-/// return `Result`.
+/// return [`Result`].
+///
+/// [`Result`]: ../std/result/enum.Result.html
 ///
 /// # Examples
 ///
@@ -307,12 +321,19 @@ macro_rules! debug_assert_ne {
 ///     }
 /// }
 ///
+/// // The prefered method of quick returning Errors
+/// fn write_to_file_question() -> Result<(), MyError> {
+///     let mut file = File::create("my_best_friends.txt")?;
+///     Ok(())
+/// }
+///
+/// // The previous method of quick returning Errors
 /// fn write_to_file_using_try() -> Result<(), MyError> {
 ///     let mut file = try!(File::create("my_best_friends.txt"));
 ///     try!(file.write_all(b"This is a list of my best friends."));
-///     println!("I wrote to the file");
 ///     Ok(())
 /// }
+///
 /// // This is equivalent to:
 /// fn write_to_file_using_match() -> Result<(), MyError> {
 ///     let mut file = try!(File::create("my_best_friends.txt"));
@@ -320,7 +341,6 @@ macro_rules! debug_assert_ne {
 ///         Ok(v) => v,
 ///         Err(e) => return Err(From::from(e)),
 ///     }
-///     println!("I wrote to the file");
 ///     Ok(())
 /// }
 /// ```
@@ -341,7 +361,7 @@ macro_rules! try {
 /// formatted according to the specified format string and the result will be passed to the writer.
 /// The writer may be any value with a `write_fmt` method; generally this comes from an
 /// implementation of either the [`std::fmt::Write`] or the [`std::io::Write`] trait. The macro
-/// returns whatever the 'write_fmt' method returns; commonly a [`std::fmt::Result`], or an
+/// returns whatever the `write_fmt` method returns; commonly a [`std::fmt::Result`], or an
 /// [`io::Result`].
 ///
 /// See [`std::fmt`] for more information on the format string syntax.
@@ -446,10 +466,20 @@ macro_rules! writeln {
 /// * Loops that dynamically terminate.
 /// * Iterators that dynamically terminate.
 ///
+/// If the determination that the code is unreachable proves incorrect, the
+/// program immediately terminates with a [`panic!`].  The function [`unreachable`],
+/// which belongs to the [`std::intrinsics`] module, informs the compilier to
+/// optimize the code out of the release version entirely.
+///
+/// [`panic!`]:  ../std/macro.panic.html
+/// [`unreachable`]: ../std/intrinsics/fn.unreachable.html
+/// [`std::intrinsics`]: ../std/intrinsics/index.html
+///
 /// # Panics
 ///
-/// This will always panic.
+/// This will always [`panic!`]
 ///
+/// [`panic!`]: ../std/macro.panic.html
 /// # Examples
 ///
 /// Match arms:
@@ -492,12 +522,15 @@ macro_rules! unreachable {
     });
 }
 
-/// A standardized placeholder for marking unfinished code. It panics with the
-/// message `"not yet implemented"` when executed.
+/// A standardized placeholder for marking unfinished code.
 ///
 /// This can be useful if you are prototyping and are just looking to have your
 /// code typecheck, or if you're implementing a trait that requires multiple
 /// methods, and you're only planning on using one of them.
+///
+/// # Panics
+///
+/// This will always [panic!](macro.panic.html)
 ///
 /// # Examples
 ///
@@ -542,7 +575,8 @@ macro_rules! unreachable {
 #[macro_export]
 #[stable(feature = "rust1", since = "1.0.0")]
 macro_rules! unimplemented {
-    () => (panic!("not yet implemented"))
+    () => (panic!("not yet implemented"));
+    ($($arg:tt)+) => (panic!("not yet implemented: {}", format_args!($($arg)*)));
 }
 
 /// Built-in macros to the compiler itself.
@@ -553,6 +587,17 @@ macro_rules! unimplemented {
 ///
 /// For more information, see documentation for `std`'s macros.
 mod builtin {
+
+    /// Unconditionally causes compilation to fail with the given error message when encountered.
+    ///
+    /// For more information, see the [RFC].
+    ///
+    /// [RFC]: https://github.com/rust-lang/rfcs/blob/master/text/1695-add-error-macro.md
+    #[stable(feature = "compile_error_macro", since = "1.20.0")]
+    #[macro_export]
+    #[cfg(dox)]
+    macro_rules! compile_error { ($msg:expr) => ({ /* compiler built-in */ }) }
+
     /// The core macro for formatted string creation & output.
     ///
     /// For more information, see the documentation for [`std::format_args!`].
@@ -637,7 +682,7 @@ mod builtin {
     #[cfg(dox)]
     macro_rules! file { () => ({ /* compiler built-in */ }) }
 
-    /// A macro which stringifies its argument.
+    /// A macro which stringifies its arguments.
     ///
     /// For more information, see the documentation for [`std::stringify!`].
     ///
@@ -645,7 +690,7 @@ mod builtin {
     #[stable(feature = "rust1", since = "1.0.0")]
     #[macro_export]
     #[cfg(dox)]
-    macro_rules! stringify { ($t:tt) => ({ /* compiler built-in */ }) }
+    macro_rules! stringify { ($($t:tt)*) => ({ /* compiler built-in */ }) }
 
     /// Includes a utf8-encoded file as a string.
     ///

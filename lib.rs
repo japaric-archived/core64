@@ -36,12 +36,12 @@
 //!   These functions are often provided by the system libc, but can also be
 //!   provided by the [rlibc crate](https://crates.io/crates/rlibc).
 //!
-//! * `rust_begin_panic` - This function takes three arguments, a
-//!   `fmt::Arguments`, a `&'static str`, and a `u32`. These three arguments
+//! * `rust_begin_panic` - This function takes four arguments, a
+//!   `fmt::Arguments`, a `&'static str`, and two `u32`'s. These four arguments
 //!   dictate the panic message, the file at which panic was invoked, and the
-//!   line. It is up to consumers of this core library to define this panic
-//!   function; it is only required to never return. This requires a `lang`
-//!   attribute named `panic_fmt`.
+//!   line and column inside the file. It is up to consumers of this core
+//!   library to define this panic function; it is only required to never
+//!   return. This requires a `lang` attribute named `panic_fmt`.
 //!
 //! * `rust_eh_personality` - is used by the failure mechanisms of the
 //!    compiler. This is often mapped to GCC's personality function, but crates
@@ -51,9 +51,7 @@
 // Since libcore defines many fundamental lang items, all tests live in a
 // separate crate, libcoretest, to avoid bizarre issues.
 
-#![crate_name = "core"]
 #![stable(feature = "core", since = "1.6.0")]
-#![crate_type = "rlib"]
 #![doc(html_logo_url = "https://www.rust-lang.org/logos/rust-logo-128x128-blk-v2.png",
        html_favicon_url = "https://doc.rust-lang.org/favicon.ico",
        html_root_url = "https://doc.rust-lang.org/nightly/",
@@ -70,7 +68,6 @@
 #![feature(allow_internal_unstable)]
 #![feature(asm)]
 #![feature(associated_type_defaults)]
-#![feature(associated_consts)]
 #![feature(cfg_target_feature)]
 #![feature(cfg_target_has_atomic)]
 #![feature(concat_idents)]
@@ -87,11 +84,28 @@
 #![feature(prelude_import)]
 #![feature(repr_simd, platform_intrinsics)]
 #![feature(rustc_attrs)]
+#![feature(rustc_const_unstable)]
 #![feature(specialization)]
 #![feature(staged_api)]
 #![feature(unboxed_closures)]
 #![feature(untagged_unions)]
 #![feature(unwind_attributes)]
+#![feature(const_min_value)]
+#![feature(const_max_value)]
+#![feature(const_atomic_bool_new)]
+#![feature(const_atomic_isize_new)]
+#![feature(const_atomic_usize_new)]
+#![feature(const_atomic_i8_new)]
+#![feature(const_atomic_u8_new)]
+#![feature(const_atomic_i16_new)]
+#![feature(const_atomic_u16_new)]
+#![feature(const_atomic_i32_new)]
+#![feature(const_atomic_u32_new)]
+#![feature(const_atomic_i64_new)]
+#![feature(const_atomic_u64_new)]
+#![feature(const_unsafe_cell_new)]
+#![feature(const_cell_new)]
+#![feature(const_nonzero_new)]
 
 #[prelude_import]
 #[allow(unused)]

@@ -12,7 +12,6 @@
 
 #![allow(deprecated)]
 
-// FIXME: #6220 Implement floating point formatting
 
 use fmt;
 use ops::{Div, Rem, Sub};
@@ -60,11 +59,11 @@ trait GenericRadix {
 
     /// Format an integer using the radix using a formatter.
     fn fmt_int<T: Int>(&self, mut x: T, f: &mut fmt::Formatter) -> fmt::Result {
-        // The radix can be as low as 2, so we need a buffer of at least 128
+        // The radix can be as low as 2, so we need a buffer of at least 64
         // characters for a base 2 number.
         let zero = T::zero();
         let is_nonnegative = x >= zero;
-        let mut buf = [0; 128];
+        let mut buf = [0; 64];
         let mut curr = buf.len();
         let base = T::from_u8(self.base());
         if is_nonnegative {
@@ -239,7 +238,7 @@ macro_rules! impl_Display {
                 // decode last 1 or 2 chars
                 if n < 10 {
                     curr -= 1;
-                    *buf_ptr.offset(curr) = (n as u8) + 48;
+                    *buf_ptr.offset(curr) = (n as u8) + b'0';
                 } else {
                     let d1 = n << 1;
                     curr -= 2;

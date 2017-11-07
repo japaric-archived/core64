@@ -12,10 +12,10 @@
 
 #![stable(feature = "rust1", since = "1.0.0")]
 
-use convert::TryFrom;
+use convert::{Infallible, TryFrom};
 use fmt;
 use intrinsics;
-use mem::size_of;
+use ops;
 use str::FromStr;
 
 /// Provides intentionally-wrapped arithmetic on `T`.
@@ -110,6 +110,7 @@ macro_rules! int_impl {
         /// assert_eq!(i8::min_value(), -128);
         /// ```
         #[stable(feature = "rust1", since = "1.0.0")]
+        #[rustc_const_unstable(feature = "const_min_value")]
         #[inline]
         pub const fn min_value() -> Self {
             !0 ^ ((!0 as $UnsignedT) >> 1) as Self
@@ -123,6 +124,7 @@ macro_rules! int_impl {
         /// assert_eq!(i8::max_value(), 127);
         /// ```
         #[stable(feature = "rust1", since = "1.0.0")]
+        #[rustc_const_unstable(feature = "const_max_value")]
         #[inline]
         pub const fn max_value() -> Self {
             !Self::min_value()
@@ -131,6 +133,10 @@ macro_rules! int_impl {
         /// Converts a string slice in a given base to an integer.
         ///
         /// Leading and trailing whitespace represent an error.
+        ///
+        /// # Panics
+        ///
+        /// This function panics if `radix` is not in the range from 2 to 36.
         ///
         /// # Examples
         ///
@@ -696,7 +702,7 @@ macro_rules! int_impl {
         /// assert_eq!((-128i8).wrapping_div(-1), -128);
         /// ```
         #[stable(feature = "num_wrapping", since = "1.2.0")]
-        #[inline(always)]
+        #[inline]
         pub fn wrapping_div(self, rhs: Self) -> Self {
             self.overflowing_div(rhs).0
         }
@@ -722,7 +728,7 @@ macro_rules! int_impl {
         /// assert_eq!((-128i8).wrapping_rem(-1), 0);
         /// ```
         #[stable(feature = "num_wrapping", since = "1.2.0")]
-        #[inline(always)]
+        #[inline]
         pub fn wrapping_rem(self, rhs: Self) -> Self {
             self.overflowing_rem(rhs).0
         }
@@ -745,7 +751,7 @@ macro_rules! int_impl {
         /// assert_eq!((-128i8).wrapping_neg(), -128);
         /// ```
         #[stable(feature = "num_wrapping", since = "1.2.0")]
-        #[inline(always)]
+        #[inline]
         pub fn wrapping_neg(self) -> Self {
             self.overflowing_neg().0
         }
@@ -770,7 +776,7 @@ macro_rules! int_impl {
         /// assert_eq!((-1i8).wrapping_shl(8), -1);
         /// ```
         #[stable(feature = "num_wrapping", since = "1.2.0")]
-        #[inline(always)]
+        #[inline]
         pub fn wrapping_shl(self, rhs: u32) -> Self {
             unsafe {
                 intrinsics::unchecked_shl(self, (rhs & ($BITS - 1)) as $SelfT)
@@ -797,7 +803,7 @@ macro_rules! int_impl {
         /// assert_eq!((-128i8).wrapping_shr(8), -128);
         /// ```
         #[stable(feature = "num_wrapping", since = "1.2.0")]
-        #[inline(always)]
+        #[inline]
         pub fn wrapping_shr(self, rhs: u32) -> Self {
             unsafe {
                 intrinsics::unchecked_shr(self, (rhs & ($BITS - 1)) as $SelfT)
@@ -823,7 +829,7 @@ macro_rules! int_impl {
         /// assert_eq!((-128i8).wrapping_abs() as u8, 128);
         /// ```
         #[stable(feature = "no_panic_abs", since = "1.13.0")]
-        #[inline(always)]
+        #[inline]
         pub fn wrapping_abs(self) -> Self {
             if self.is_negative() {
                 self.wrapping_neg()
@@ -1255,6 +1261,7 @@ macro_rules! uint_impl {
     ($SelfT:ty, $ActualT:ty, $BITS:expr,
      $ctpop:path,
      $ctlz:path,
+     $ctlz_nonzero:path,
      $cttz:path,
      $bswap:path,
      $add_with_overflow:path,
@@ -1268,6 +1275,7 @@ macro_rules! uint_impl {
         /// assert_eq!(u8::min_value(), 0);
         /// ```
         #[stable(feature = "rust1", since = "1.0.0")]
+        #[rustc_const_unstable(feature = "const_min_value")]
         #[inline]
         pub const fn min_value() -> Self { 0 }
 
@@ -1279,6 +1287,7 @@ macro_rules! uint_impl {
         /// assert_eq!(u8::max_value(), 255);
         /// ```
         #[stable(feature = "rust1", since = "1.0.0")]
+        #[rustc_const_unstable(feature = "const_max_value")]
         #[inline]
         pub const fn max_value() -> Self { !0 }
 
@@ -1823,7 +1832,7 @@ macro_rules! uint_impl {
         /// assert_eq!(100u8.wrapping_div(10), 10);
         /// ```
         #[stable(feature = "num_wrapping", since = "1.2.0")]
-        #[inline(always)]
+        #[inline]
         pub fn wrapping_div(self, rhs: Self) -> Self {
             self / rhs
         }
@@ -1843,7 +1852,7 @@ macro_rules! uint_impl {
         /// assert_eq!(100u8.wrapping_rem(10), 0);
         /// ```
         #[stable(feature = "num_wrapping", since = "1.2.0")]
-        #[inline(always)]
+        #[inline]
         pub fn wrapping_rem(self, rhs: Self) -> Self {
             self % rhs
         }
@@ -1869,7 +1878,7 @@ macro_rules! uint_impl {
         /// assert_eq!(180u8.wrapping_neg(), (127 + 1) - (180u8 - (127 + 1)));
         /// ```
         #[stable(feature = "num_wrapping", since = "1.2.0")]
-        #[inline(always)]
+        #[inline]
         pub fn wrapping_neg(self) -> Self {
             self.overflowing_neg().0
         }
@@ -1894,7 +1903,7 @@ macro_rules! uint_impl {
         /// assert_eq!(1u8.wrapping_shl(8), 1);
         /// ```
         #[stable(feature = "num_wrapping", since = "1.2.0")]
-        #[inline(always)]
+        #[inline]
         pub fn wrapping_shl(self, rhs: u32) -> Self {
             unsafe {
                 intrinsics::unchecked_shl(self, (rhs & ($BITS - 1)) as $SelfT)
@@ -1921,7 +1930,7 @@ macro_rules! uint_impl {
         /// assert_eq!(128u8.wrapping_shr(8), 128);
         /// ```
         #[stable(feature = "num_wrapping", since = "1.2.0")]
-        #[inline(always)]
+        #[inline]
         pub fn wrapping_shr(self, rhs: u32) -> Self {
             unsafe {
                 intrinsics::unchecked_shr(self, (rhs & ($BITS - 1)) as $SelfT)
@@ -2168,8 +2177,33 @@ macro_rules! uint_impl {
             (self.wrapping_sub(1)) & self == 0 && !(self == 0)
         }
 
+        // Returns one less than next power of two.
+        // (For 8u8 next power of two is 8u8 and for 6u8 it is 8u8)
+        //
+        // 8u8.one_less_than_next_power_of_two() == 7
+        // 6u8.one_less_than_next_power_of_two() == 7
+        //
+        // This method cannot overflow, as in the `next_power_of_two`
+        // overflow cases it instead ends up returning the maximum value
+        // of the type, and can return 0 for 0.
+        #[inline]
+        fn one_less_than_next_power_of_two(self) -> Self {
+            if self <= 1 { return 0; }
+
+            // Because `p > 0`, it cannot consist entirely of leading zeros.
+            // That means the shift is always in-bounds, and some processors
+            // (such as intel pre-haswell) have more efficient ctlz
+            // intrinsics when the argument is non-zero.
+            let p = self - 1;
+            let z = unsafe { $ctlz_nonzero(p) };
+            <$SelfT>::max_value() >> z
+        }
+
         /// Returns the smallest power of two greater than or equal to `self`.
-        /// Unspecified behavior on overflow.
+        ///
+        /// When return value overflows (i.e. `self > (1 << (N-1))` for type
+        /// `uN`), it panics in debug mode and return value is wrapped to 0 in
+        /// release mode (the only situation in which method can return 0).
         ///
         /// # Examples
         ///
@@ -2182,9 +2216,8 @@ macro_rules! uint_impl {
         #[stable(feature = "rust1", since = "1.0.0")]
         #[inline]
         pub fn next_power_of_two(self) -> Self {
-            let bits = size_of::<Self>() * 8;
-            let one: Self = 1;
-            one << ((bits - self.wrapping_sub(one).leading_zeros() as usize) % bits)
+            // Call the trait to get overflow checks
+            ops::Add::add(self.one_less_than_next_power_of_two(), 1)
         }
 
         /// Returns the smallest power of two greater than or equal to `n`. If
@@ -2202,12 +2235,7 @@ macro_rules! uint_impl {
         /// ```
         #[stable(feature = "rust1", since = "1.0.0")]
         pub fn checked_next_power_of_two(self) -> Option<Self> {
-            let npot = self.next_power_of_two();
-            if npot >= self {
-                Some(npot)
-            } else {
-                None
-            }
+            self.one_less_than_next_power_of_two().checked_add(1)
         }
     }
 }
@@ -2217,11 +2245,553 @@ impl u8 {
     uint_impl! { u8, u8, 8,
         intrinsics::ctpop,
         intrinsics::ctlz,
+        intrinsics::ctlz_nonzero,
         intrinsics::cttz,
         intrinsics::bswap,
         intrinsics::add_with_overflow,
         intrinsics::sub_with_overflow,
         intrinsics::mul_with_overflow }
+
+
+    /// Checks if the value is within the ASCII range.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let ascii = 97u8;
+    /// let non_ascii = 150u8;
+    ///
+    /// assert!(ascii.is_ascii());
+    /// assert!(!non_ascii.is_ascii());
+    /// ```
+    #[stable(feature = "ascii_methods_on_intrinsics", since = "1.21.0")]
+    #[inline]
+    pub fn is_ascii(&self) -> bool {
+        *self & 128 == 0
+    }
+
+    /// Makes a copy of the value in its ASCII upper case equivalent.
+    ///
+    /// ASCII letters 'a' to 'z' are mapped to 'A' to 'Z',
+    /// but non-ASCII letters are unchanged.
+    ///
+    /// To uppercase the value in-place, use [`make_ascii_uppercase`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let lowercase_a = 97u8;
+    ///
+    /// assert_eq!(65, lowercase_a.to_ascii_uppercase());
+    /// ```
+    ///
+    /// [`make_ascii_uppercase`]: #method.make_ascii_uppercase
+    #[stable(feature = "ascii_methods_on_intrinsics", since = "1.21.0")]
+    #[inline]
+    pub fn to_ascii_uppercase(&self) -> u8 {
+        ASCII_UPPERCASE_MAP[*self as usize]
+    }
+
+    /// Makes a copy of the value in its ASCII lower case equivalent.
+    ///
+    /// ASCII letters 'A' to 'Z' are mapped to 'a' to 'z',
+    /// but non-ASCII letters are unchanged.
+    ///
+    /// To lowercase the value in-place, use [`make_ascii_lowercase`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let uppercase_a = 65u8;
+    ///
+    /// assert_eq!(97, uppercase_a.to_ascii_lowercase());
+    /// ```
+    ///
+    /// [`make_ascii_lowercase`]: #method.make_ascii_lowercase
+    #[stable(feature = "ascii_methods_on_intrinsics", since = "1.21.0")]
+    #[inline]
+    pub fn to_ascii_lowercase(&self) -> u8 {
+        ASCII_LOWERCASE_MAP[*self as usize]
+    }
+
+    /// Checks that two values are an ASCII case-insensitive match.
+    ///
+    /// This is equivalent to `to_ascii_lowercase(a) == to_ascii_lowercase(b)`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let lowercase_a = 97u8;
+    /// let uppercase_a = 65u8;
+    ///
+    /// assert!(lowercase_a.eq_ignore_ascii_case(&uppercase_a));
+    /// ```
+    #[stable(feature = "ascii_methods_on_intrinsics", since = "1.21.0")]
+    #[inline]
+    pub fn eq_ignore_ascii_case(&self, other: &u8) -> bool {
+        self.to_ascii_lowercase() == other.to_ascii_lowercase()
+    }
+
+    /// Converts this value to its ASCII upper case equivalent in-place.
+    ///
+    /// ASCII letters 'a' to 'z' are mapped to 'A' to 'Z',
+    /// but non-ASCII letters are unchanged.
+    ///
+    /// To return a new uppercased value without modifying the existing one, use
+    /// [`to_ascii_uppercase`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut byte = b'a';
+    ///
+    /// byte.make_ascii_uppercase();
+    ///
+    /// assert_eq!(b'A', byte);
+    /// ```
+    ///
+    /// [`to_ascii_uppercase`]: #method.to_ascii_uppercase
+    #[stable(feature = "ascii_methods_on_intrinsics", since = "1.21.0")]
+    #[inline]
+    pub fn make_ascii_uppercase(&mut self) {
+        *self = self.to_ascii_uppercase();
+    }
+
+    /// Converts this value to its ASCII lower case equivalent in-place.
+    ///
+    /// ASCII letters 'A' to 'Z' are mapped to 'a' to 'z',
+    /// but non-ASCII letters are unchanged.
+    ///
+    /// To return a new lowercased value without modifying the existing one, use
+    /// [`to_ascii_lowercase`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut byte = b'A';
+    ///
+    /// byte.make_ascii_lowercase();
+    ///
+    /// assert_eq!(b'a', byte);
+    /// ```
+    ///
+    /// [`to_ascii_lowercase`]: #method.to_ascii_lowercase
+    #[stable(feature = "ascii_methods_on_intrinsics", since = "1.21.0")]
+    #[inline]
+    pub fn make_ascii_lowercase(&mut self) {
+        *self = self.to_ascii_lowercase();
+    }
+
+    /// Checks if the value is an ASCII alphabetic character:
+    ///
+    /// - U+0041 'A' ... U+005A 'Z', or
+    /// - U+0061 'a' ... U+007A 'z'.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// #![feature(ascii_ctype)]
+    ///
+    /// let uppercase_a = b'A';
+    /// let uppercase_g = b'G';
+    /// let a = b'a';
+    /// let g = b'g';
+    /// let zero = b'0';
+    /// let percent = b'%';
+    /// let space = b' ';
+    /// let lf = b'\n';
+    /// let esc = 0x1b_u8;
+    ///
+    /// assert!(uppercase_a.is_ascii_alphabetic());
+    /// assert!(uppercase_g.is_ascii_alphabetic());
+    /// assert!(a.is_ascii_alphabetic());
+    /// assert!(g.is_ascii_alphabetic());
+    /// assert!(!zero.is_ascii_alphabetic());
+    /// assert!(!percent.is_ascii_alphabetic());
+    /// assert!(!space.is_ascii_alphabetic());
+    /// assert!(!lf.is_ascii_alphabetic());
+    /// assert!(!esc.is_ascii_alphabetic());
+    /// ```
+    #[unstable(feature = "ascii_ctype", issue = "39658")]
+    #[inline]
+    pub fn is_ascii_alphabetic(&self) -> bool {
+        if *self >= 0x80 { return false; }
+        match ASCII_CHARACTER_CLASS[*self as usize] {
+            L | Lx | U | Ux => true,
+            _ => false
+        }
+    }
+
+    /// Checks if the value is an ASCII uppercase character:
+    /// U+0041 'A' ... U+005A 'Z'.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// #![feature(ascii_ctype)]
+    ///
+    /// let uppercase_a = b'A';
+    /// let uppercase_g = b'G';
+    /// let a = b'a';
+    /// let g = b'g';
+    /// let zero = b'0';
+    /// let percent = b'%';
+    /// let space = b' ';
+    /// let lf = b'\n';
+    /// let esc = 0x1b_u8;
+    ///
+    /// assert!(uppercase_a.is_ascii_uppercase());
+    /// assert!(uppercase_g.is_ascii_uppercase());
+    /// assert!(!a.is_ascii_uppercase());
+    /// assert!(!g.is_ascii_uppercase());
+    /// assert!(!zero.is_ascii_uppercase());
+    /// assert!(!percent.is_ascii_uppercase());
+    /// assert!(!space.is_ascii_uppercase());
+    /// assert!(!lf.is_ascii_uppercase());
+    /// assert!(!esc.is_ascii_uppercase());
+    /// ```
+    #[unstable(feature = "ascii_ctype", issue = "39658")]
+    #[inline]
+    pub fn is_ascii_uppercase(&self) -> bool {
+        if *self >= 0x80 { return false }
+        match ASCII_CHARACTER_CLASS[*self as usize] {
+            U | Ux => true,
+            _ => false
+        }
+    }
+
+    /// Checks if the value is an ASCII lowercase character:
+    /// U+0061 'a' ... U+007A 'z'.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// #![feature(ascii_ctype)]
+    ///
+    /// let uppercase_a = b'A';
+    /// let uppercase_g = b'G';
+    /// let a = b'a';
+    /// let g = b'g';
+    /// let zero = b'0';
+    /// let percent = b'%';
+    /// let space = b' ';
+    /// let lf = b'\n';
+    /// let esc = 0x1b_u8;
+    ///
+    /// assert!(!uppercase_a.is_ascii_lowercase());
+    /// assert!(!uppercase_g.is_ascii_lowercase());
+    /// assert!(a.is_ascii_lowercase());
+    /// assert!(g.is_ascii_lowercase());
+    /// assert!(!zero.is_ascii_lowercase());
+    /// assert!(!percent.is_ascii_lowercase());
+    /// assert!(!space.is_ascii_lowercase());
+    /// assert!(!lf.is_ascii_lowercase());
+    /// assert!(!esc.is_ascii_lowercase());
+    /// ```
+    #[unstable(feature = "ascii_ctype", issue = "39658")]
+    #[inline]
+    pub fn is_ascii_lowercase(&self) -> bool {
+        if *self >= 0x80 { return false }
+        match ASCII_CHARACTER_CLASS[*self as usize] {
+            L | Lx => true,
+            _ => false
+        }
+    }
+
+    /// Checks if the value is an ASCII alphanumeric character:
+    ///
+    /// - U+0041 'A' ... U+005A 'Z', or
+    /// - U+0061 'a' ... U+007A 'z', or
+    /// - U+0030 '0' ... U+0039 '9'.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// #![feature(ascii_ctype)]
+    ///
+    /// let uppercase_a = b'A';
+    /// let uppercase_g = b'G';
+    /// let a = b'a';
+    /// let g = b'g';
+    /// let zero = b'0';
+    /// let percent = b'%';
+    /// let space = b' ';
+    /// let lf = b'\n';
+    /// let esc = 0x1b_u8;
+    ///
+    /// assert!(uppercase_a.is_ascii_alphanumeric());
+    /// assert!(uppercase_g.is_ascii_alphanumeric());
+    /// assert!(a.is_ascii_alphanumeric());
+    /// assert!(g.is_ascii_alphanumeric());
+    /// assert!(zero.is_ascii_alphanumeric());
+    /// assert!(!percent.is_ascii_alphanumeric());
+    /// assert!(!space.is_ascii_alphanumeric());
+    /// assert!(!lf.is_ascii_alphanumeric());
+    /// assert!(!esc.is_ascii_alphanumeric());
+    /// ```
+    #[unstable(feature = "ascii_ctype", issue = "39658")]
+    #[inline]
+    pub fn is_ascii_alphanumeric(&self) -> bool {
+        if *self >= 0x80 { return false }
+        match ASCII_CHARACTER_CLASS[*self as usize] {
+            D | L | Lx | U | Ux => true,
+            _ => false
+        }
+    }
+
+    /// Checks if the value is an ASCII decimal digit:
+    /// U+0030 '0' ... U+0039 '9'.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// #![feature(ascii_ctype)]
+    ///
+    /// let uppercase_a = b'A';
+    /// let uppercase_g = b'G';
+    /// let a = b'a';
+    /// let g = b'g';
+    /// let zero = b'0';
+    /// let percent = b'%';
+    /// let space = b' ';
+    /// let lf = b'\n';
+    /// let esc = 0x1b_u8;
+    ///
+    /// assert!(!uppercase_a.is_ascii_digit());
+    /// assert!(!uppercase_g.is_ascii_digit());
+    /// assert!(!a.is_ascii_digit());
+    /// assert!(!g.is_ascii_digit());
+    /// assert!(zero.is_ascii_digit());
+    /// assert!(!percent.is_ascii_digit());
+    /// assert!(!space.is_ascii_digit());
+    /// assert!(!lf.is_ascii_digit());
+    /// assert!(!esc.is_ascii_digit());
+    /// ```
+    #[unstable(feature = "ascii_ctype", issue = "39658")]
+    #[inline]
+    pub fn is_ascii_digit(&self) -> bool {
+        if *self >= 0x80 { return false }
+        match ASCII_CHARACTER_CLASS[*self as usize] {
+            D => true,
+            _ => false
+        }
+    }
+
+    /// Checks if the value is an ASCII hexadecimal digit:
+    ///
+    /// - U+0030 '0' ... U+0039 '9', or
+    /// - U+0041 'A' ... U+0046 'F', or
+    /// - U+0061 'a' ... U+0066 'f'.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// #![feature(ascii_ctype)]
+    ///
+    /// let uppercase_a = b'A';
+    /// let uppercase_g = b'G';
+    /// let a = b'a';
+    /// let g = b'g';
+    /// let zero = b'0';
+    /// let percent = b'%';
+    /// let space = b' ';
+    /// let lf = b'\n';
+    /// let esc = 0x1b_u8;
+    ///
+    /// assert!(uppercase_a.is_ascii_hexdigit());
+    /// assert!(!uppercase_g.is_ascii_hexdigit());
+    /// assert!(a.is_ascii_hexdigit());
+    /// assert!(!g.is_ascii_hexdigit());
+    /// assert!(zero.is_ascii_hexdigit());
+    /// assert!(!percent.is_ascii_hexdigit());
+    /// assert!(!space.is_ascii_hexdigit());
+    /// assert!(!lf.is_ascii_hexdigit());
+    /// assert!(!esc.is_ascii_hexdigit());
+    /// ```
+    #[unstable(feature = "ascii_ctype", issue = "39658")]
+    #[inline]
+    pub fn is_ascii_hexdigit(&self) -> bool {
+        if *self >= 0x80 { return false }
+        match ASCII_CHARACTER_CLASS[*self as usize] {
+            D | Lx | Ux => true,
+            _ => false
+        }
+    }
+
+    /// Checks if the value is an ASCII punctuation character:
+    ///
+    /// - U+0021 ... U+002F `! " # $ % & ' ( ) * + , - . /`, or
+    /// - U+003A ... U+0040 `: ; < = > ? @`, or
+    /// - U+005B ... U+0060 `[ \\ ] ^ _ \``, or
+    /// - U+007B ... U+007E `{ | } ~`
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// #![feature(ascii_ctype)]
+    ///
+    /// let uppercase_a = b'A';
+    /// let uppercase_g = b'G';
+    /// let a = b'a';
+    /// let g = b'g';
+    /// let zero = b'0';
+    /// let percent = b'%';
+    /// let space = b' ';
+    /// let lf = b'\n';
+    /// let esc = 0x1b_u8;
+    ///
+    /// assert!(!uppercase_a.is_ascii_punctuation());
+    /// assert!(!uppercase_g.is_ascii_punctuation());
+    /// assert!(!a.is_ascii_punctuation());
+    /// assert!(!g.is_ascii_punctuation());
+    /// assert!(!zero.is_ascii_punctuation());
+    /// assert!(percent.is_ascii_punctuation());
+    /// assert!(!space.is_ascii_punctuation());
+    /// assert!(!lf.is_ascii_punctuation());
+    /// assert!(!esc.is_ascii_punctuation());
+    /// ```
+    #[unstable(feature = "ascii_ctype", issue = "39658")]
+    #[inline]
+    pub fn is_ascii_punctuation(&self) -> bool {
+        if *self >= 0x80 { return false }
+        match ASCII_CHARACTER_CLASS[*self as usize] {
+            P => true,
+            _ => false
+        }
+    }
+
+    /// Checks if the value is an ASCII graphic character:
+    /// U+0021 '@' ... U+007E '~'.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// #![feature(ascii_ctype)]
+    ///
+    /// let uppercase_a = b'A';
+    /// let uppercase_g = b'G';
+    /// let a = b'a';
+    /// let g = b'g';
+    /// let zero = b'0';
+    /// let percent = b'%';
+    /// let space = b' ';
+    /// let lf = b'\n';
+    /// let esc = 0x1b_u8;
+    ///
+    /// assert!(uppercase_a.is_ascii_graphic());
+    /// assert!(uppercase_g.is_ascii_graphic());
+    /// assert!(a.is_ascii_graphic());
+    /// assert!(g.is_ascii_graphic());
+    /// assert!(zero.is_ascii_graphic());
+    /// assert!(percent.is_ascii_graphic());
+    /// assert!(!space.is_ascii_graphic());
+    /// assert!(!lf.is_ascii_graphic());
+    /// assert!(!esc.is_ascii_graphic());
+    /// ```
+    #[unstable(feature = "ascii_ctype", issue = "39658")]
+    #[inline]
+    pub fn is_ascii_graphic(&self) -> bool {
+        if *self >= 0x80 { return false; }
+        match ASCII_CHARACTER_CLASS[*self as usize] {
+            Ux | U | Lx | L | D | P => true,
+            _ => false
+        }
+    }
+
+    /// Checks if the value is an ASCII whitespace character:
+    /// U+0020 SPACE, U+0009 HORIZONTAL TAB, U+000A LINE FEED,
+    /// U+000C FORM FEED, or U+000D CARRIAGE RETURN.
+    ///
+    /// Rust uses the WhatWG Infra Standard's [definition of ASCII
+    /// whitespace][infra-aw]. There are several other definitions in
+    /// wide use. For instance, [the POSIX locale][pct] includes
+    /// U+000B VERTICAL TAB as well as all the above characters,
+    /// but—from the very same specification—[the default rule for
+    /// "field splitting" in the Bourne shell][bfs] considers *only*
+    /// SPACE, HORIZONTAL TAB, and LINE FEED as whitespace.
+    ///
+    /// If you are writing a program that will process an existing
+    /// file format, check what that format's definition of whitespace is
+    /// before using this function.
+    ///
+    /// [infra-aw]: https://infra.spec.whatwg.org/#ascii-whitespace
+    /// [pct]: http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/V1_chap07.html#tag_07_03_01
+    /// [bfs]: http://pubs.opengroup.org/onlinepubs/9699919799/utilities/V3_chap02.html#tag_18_06_05
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// #![feature(ascii_ctype)]
+    ///
+    /// let uppercase_a = b'A';
+    /// let uppercase_g = b'G';
+    /// let a = b'a';
+    /// let g = b'g';
+    /// let zero = b'0';
+    /// let percent = b'%';
+    /// let space = b' ';
+    /// let lf = b'\n';
+    /// let esc = 0x1b_u8;
+    ///
+    /// assert!(!uppercase_a.is_ascii_whitespace());
+    /// assert!(!uppercase_g.is_ascii_whitespace());
+    /// assert!(!a.is_ascii_whitespace());
+    /// assert!(!g.is_ascii_whitespace());
+    /// assert!(!zero.is_ascii_whitespace());
+    /// assert!(!percent.is_ascii_whitespace());
+    /// assert!(space.is_ascii_whitespace());
+    /// assert!(lf.is_ascii_whitespace());
+    /// assert!(!esc.is_ascii_whitespace());
+    /// ```
+    #[unstable(feature = "ascii_ctype", issue = "39658")]
+    #[inline]
+    pub fn is_ascii_whitespace(&self) -> bool {
+        if *self >= 0x80 { return false; }
+        match ASCII_CHARACTER_CLASS[*self as usize] {
+            Cw | W => true,
+            _ => false
+        }
+    }
+
+    /// Checks if the value is an ASCII control character:
+    /// U+0000 NUL ... U+001F UNIT SEPARATOR, or U+007F DELETE.
+    /// Note that most ASCII whitespace characters are control
+    /// characters, but SPACE is not.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// #![feature(ascii_ctype)]
+    ///
+    /// let uppercase_a = b'A';
+    /// let uppercase_g = b'G';
+    /// let a = b'a';
+    /// let g = b'g';
+    /// let zero = b'0';
+    /// let percent = b'%';
+    /// let space = b' ';
+    /// let lf = b'\n';
+    /// let esc = 0x1b_u8;
+    ///
+    /// assert!(!uppercase_a.is_ascii_control());
+    /// assert!(!uppercase_g.is_ascii_control());
+    /// assert!(!a.is_ascii_control());
+    /// assert!(!g.is_ascii_control());
+    /// assert!(!zero.is_ascii_control());
+    /// assert!(!percent.is_ascii_control());
+    /// assert!(!space.is_ascii_control());
+    /// assert!(lf.is_ascii_control());
+    /// assert!(esc.is_ascii_control());
+    /// ```
+    #[unstable(feature = "ascii_ctype", issue = "39658")]
+    #[inline]
+    pub fn is_ascii_control(&self) -> bool {
+        if *self >= 0x80 { return false; }
+        match ASCII_CHARACTER_CLASS[*self as usize] {
+            C | Cw => true,
+            _ => false
+        }
+    }
 }
 
 #[lang = "u16"]
@@ -2229,6 +2799,7 @@ impl u16 {
     uint_impl! { u16, u16, 16,
         intrinsics::ctpop,
         intrinsics::ctlz,
+        intrinsics::ctlz_nonzero,
         intrinsics::cttz,
         intrinsics::bswap,
         intrinsics::add_with_overflow,
@@ -2241,6 +2812,7 @@ impl u32 {
     uint_impl! { u32, u32, 32,
         intrinsics::ctpop,
         intrinsics::ctlz,
+        intrinsics::ctlz_nonzero,
         intrinsics::cttz,
         intrinsics::bswap,
         intrinsics::add_with_overflow,
@@ -2253,6 +2825,7 @@ impl u64 {
     uint_impl! { u64, u64, 64,
         intrinsics::ctpop,
         intrinsics::ctlz,
+        intrinsics::ctlz_nonzero,
         intrinsics::cttz,
         intrinsics::bswap,
         intrinsics::add_with_overflow,
@@ -2266,6 +2839,7 @@ impl usize {
     uint_impl! { usize, u16, 16,
         intrinsics::ctpop,
         intrinsics::ctlz,
+        intrinsics::ctlz_nonzero,
         intrinsics::cttz,
         intrinsics::bswap,
         intrinsics::add_with_overflow,
@@ -2278,6 +2852,7 @@ impl usize {
     uint_impl! { usize, u32, 32,
         intrinsics::ctpop,
         intrinsics::ctlz,
+        intrinsics::ctlz_nonzero,
         intrinsics::cttz,
         intrinsics::bswap,
         intrinsics::add_with_overflow,
@@ -2291,6 +2866,7 @@ impl usize {
     uint_impl! { usize, u64, 64,
         intrinsics::ctpop,
         intrinsics::ctlz,
+        intrinsics::ctlz_nonzero,
         intrinsics::cttz,
         intrinsics::bswap,
         intrinsics::add_with_overflow,
@@ -2408,6 +2984,13 @@ pub trait Float: Sized {
     /// Convert degrees to radians.
     #[stable(feature = "deg_rad_conversions", since="1.7.0")]
     fn to_radians(self) -> Self;
+
+    /// Returns the maximum of the two numbers.
+    #[stable(feature = "core_float_min_max", since="1.20.0")]
+    fn max(self, other: Self) -> Self;
+    /// Returns the minimum of the two numbers.
+    #[stable(feature = "core_float_min_max", since="1.20.0")]
+    fn min(self, other: Self) -> Self;
 }
 
 macro_rules! from_str_radix_int_impl {
@@ -2446,16 +3029,58 @@ impl fmt::Display for TryFromIntError {
     }
 }
 
-macro_rules! same_sign_try_from_int_impl {
-    ($storage:ty, $target:ty, $($source:ty),*) => {$(
+#[unstable(feature = "try_from", issue = "33417")]
+impl From<Infallible> for TryFromIntError {
+    fn from(infallible: Infallible) -> TryFromIntError {
+        match infallible {
+        }
+    }
+}
+
+// no possible bounds violation
+macro_rules! try_from_unbounded {
+    ($source:ty, $($target:ty),*) => {$(
+        #[unstable(feature = "try_from", issue = "33417")]
+        impl TryFrom<$source> for $target {
+            type Error = Infallible;
+
+            #[inline]
+            fn try_from(value: $source) -> Result<Self, Self::Error> {
+                Ok(value as $target)
+            }
+        }
+    )*}
+}
+
+// only negative bounds
+macro_rules! try_from_lower_bounded {
+    ($source:ty, $($target:ty),*) => {$(
         #[unstable(feature = "try_from", issue = "33417")]
         impl TryFrom<$source> for $target {
             type Error = TryFromIntError;
 
+            #[inline]
             fn try_from(u: $source) -> Result<$target, TryFromIntError> {
-                let min = <$target as FromStrRadixHelper>::min_value() as $storage;
-                let max = <$target as FromStrRadixHelper>::max_value() as $storage;
-                if u as $storage < min || u as $storage > max {
+                if u >= 0 {
+                    Ok(u as $target)
+                } else {
+                    Err(TryFromIntError(()))
+                }
+            }
+        }
+    )*}
+}
+
+// unsigned to signed (only positive bound)
+macro_rules! try_from_upper_bounded {
+    ($source:ty, $($target:ty),*) => {$(
+        #[unstable(feature = "try_from", issue = "33417")]
+        impl TryFrom<$source> for $target {
+            type Error = TryFromIntError;
+
+            #[inline]
+            fn try_from(u: $source) -> Result<$target, TryFromIntError> {
+                if u > (<$target>::max_value() as $source) {
                     Err(TryFromIntError(()))
                 } else {
                     Ok(u as $target)
@@ -2465,54 +3090,134 @@ macro_rules! same_sign_try_from_int_impl {
     )*}
 }
 
-same_sign_try_from_int_impl!(u64, u8, u8, u16, u32, u64, usize);
-same_sign_try_from_int_impl!(i64, i8, i8, i16, i32, i64, isize);
-same_sign_try_from_int_impl!(u64, u16, u8, u16, u32, u64, usize);
-same_sign_try_from_int_impl!(i64, i16, i8, i16, i32, i64, isize);
-same_sign_try_from_int_impl!(u64, u32, u8, u16, u32, u64, usize);
-same_sign_try_from_int_impl!(i64, i32, i8, i16, i32, i64, isize);
-same_sign_try_from_int_impl!(u64, u64, u8, u16, u32, u64, usize);
-same_sign_try_from_int_impl!(i64, i64, i8, i16, i32, i64, isize);
-same_sign_try_from_int_impl!(u64, usize, u8, u16, u32, u64, usize);
-same_sign_try_from_int_impl!(i64, isize, i8, i16, i32, i64, isize);
-
-macro_rules! cross_sign_from_int_impl {
-    ($unsigned:ty, $($signed:ty),*) => {$(
+// all other cases
+macro_rules! try_from_both_bounded {
+    ($source:ty, $($target:ty),*) => {$(
         #[unstable(feature = "try_from", issue = "33417")]
-        impl TryFrom<$unsigned> for $signed {
+        impl TryFrom<$source> for $target {
             type Error = TryFromIntError;
 
-            fn try_from(u: $unsigned) -> Result<$signed, TryFromIntError> {
-                let max = <$signed as FromStrRadixHelper>::max_value() as u64;
-                if u as u64 > max {
+            #[inline]
+            fn try_from(u: $source) -> Result<$target, TryFromIntError> {
+                let min = <$target>::min_value() as $source;
+                let max = <$target>::max_value() as $source;
+                if u < min || u > max {
                     Err(TryFromIntError(()))
                 } else {
-                    Ok(u as $signed)
-                }
-            }
-        }
-
-        #[unstable(feature = "try_from", issue = "33417")]
-        impl TryFrom<$signed> for $unsigned {
-            type Error = TryFromIntError;
-
-            fn try_from(u: $signed) -> Result<$unsigned, TryFromIntError> {
-                let max = <$unsigned as FromStrRadixHelper>::max_value() as u64;
-                if u < 0 || u as u64 > max {
-                    Err(TryFromIntError(()))
-                } else {
-                    Ok(u as $unsigned)
+                    Ok(u as $target)
                 }
             }
         }
     )*}
 }
 
-cross_sign_from_int_impl!(u8, i8, i16, i32, i64, isize);
-cross_sign_from_int_impl!(u16, i8, i16, i32, i64, isize);
-cross_sign_from_int_impl!(u32, i8, i16, i32, i64, isize);
-cross_sign_from_int_impl!(u64, i8, i16, i32, i64, isize);
-cross_sign_from_int_impl!(usize, i8, i16, i32, i64, isize);
+macro_rules! rev {
+    ($mac:ident, $source:ty, $($target:ty),*) => {$(
+        $mac!($target, $source);
+    )*}
+}
+
+/// intra-sign conversions
+try_from_upper_bounded!(u16, u8);
+try_from_upper_bounded!(u32, u16, u8);
+try_from_upper_bounded!(u64, u32, u16, u8);
+
+try_from_both_bounded!(i16, i8);
+try_from_both_bounded!(i32, i16, i8);
+try_from_both_bounded!(i64, i32, i16, i8);
+
+// unsigned-to-signed
+try_from_upper_bounded!(u8, i8);
+try_from_upper_bounded!(u16, i8, i16);
+try_from_upper_bounded!(u32, i8, i16, i32);
+try_from_upper_bounded!(u64, i8, i16, i32, i64);
+
+// signed-to-unsigned
+try_from_lower_bounded!(i8, u8, u16, u32, u64);
+try_from_lower_bounded!(i16, u16, u32, u64);
+try_from_lower_bounded!(i32, u32, u64);
+try_from_lower_bounded!(i64, u64);
+try_from_both_bounded!(i16, u8);
+try_from_both_bounded!(i32, u16, u8);
+try_from_both_bounded!(i64, u32, u16, u8);
+
+// usize/isize
+try_from_upper_bounded!(usize, isize);
+try_from_lower_bounded!(isize, usize);
+
+#[cfg(target_pointer_width = "16")]
+mod ptr_try_from_impls {
+    use super::TryFromIntError;
+    use convert::{Infallible, TryFrom};
+
+    try_from_upper_bounded!(usize, u8);
+    try_from_unbounded!(usize, u16, u32, u64);
+    try_from_upper_bounded!(usize, i8, i16);
+    try_from_unbounded!(usize, i32, i64);
+
+    try_from_both_bounded!(isize, u8);
+    try_from_lower_bounded!(isize, u16, u32, u64);
+    try_from_both_bounded!(isize, i8);
+    try_from_unbounded!(isize, i16, i32, i64);
+
+    rev!(try_from_unbounded, usize, u16);
+    rev!(try_from_upper_bounded, usize, u32, u64);
+    rev!(try_from_lower_bounded, usize, i8, i16);
+    rev!(try_from_both_bounded, usize, i32, i64);
+
+    rev!(try_from_unbounded, isize, u8);
+    rev!(try_from_upper_bounded, isize, u16, u32, u64);
+    rev!(try_from_unbounded, isize, i16);
+    rev!(try_from_both_bounded, isize, i32, i64);
+}
+
+#[cfg(target_pointer_width = "32")]
+mod ptr_try_from_impls {
+    use super::TryFromIntError;
+    use convert::{Infallible, TryFrom};
+
+    try_from_upper_bounded!(usize, u8, u16);
+    try_from_unbounded!(usize, u32, u64);
+    try_from_upper_bounded!(usize, i8, i16, i32);
+    try_from_unbounded!(usize, i64);
+
+    try_from_both_bounded!(isize, u8, u16);
+    try_from_lower_bounded!(isize, u32, u64);
+    try_from_both_bounded!(isize, i8, i16);
+    try_from_unbounded!(isize, i32, i64);
+
+    rev!(try_from_unbounded, usize, u16, u32);
+    rev!(try_from_upper_bounded, usize, u64);
+    rev!(try_from_lower_bounded, usize, i8, i16, i32);
+    rev!(try_from_both_bounded, usize, i64);
+
+    rev!(try_from_unbounded, isize, u8, u16);
+    rev!(try_from_upper_bounded, isize, u32, u64);
+    rev!(try_from_unbounded, isize, i16, i32);
+    rev!(try_from_both_bounded, isize, i64);
+}
+
+#[cfg(target_pointer_width = "64")]
+mod ptr_try_from_impls {
+    use super::TryFromIntError;
+    use convert::{Infallible, TryFrom};
+
+    try_from_upper_bounded!(usize, u8, u16, u32);
+    try_from_unbounded!(usize, u64);
+    try_from_upper_bounded!(usize, i8, i16, i32, i64);
+
+    try_from_both_bounded!(isize, u8, u16, u32);
+    try_from_lower_bounded!(isize, u64);
+    try_from_both_bounded!(isize, i8, i16, i32);
+    try_from_unbounded!(isize, i64);
+
+    rev!(try_from_unbounded, usize, u16, u32, u64);
+    rev!(try_from_lower_bounded, usize, i8, i16, i32, i64);
+
+    rev!(try_from_unbounded, isize, u8, u16, u32);
+    rev!(try_from_upper_bounded, isize, u64);
+    rev!(try_from_unbounded, isize, i16, i32, i64);
+}
 
 #[doc(hidden)]
 trait FromStrRadixHelper: PartialOrd + Copy {
@@ -2526,15 +3231,21 @@ trait FromStrRadixHelper: PartialOrd + Copy {
 
 macro_rules! doit {
     ($($t:ty)*) => ($(impl FromStrRadixHelper for $t {
+        #[inline]
         fn min_value() -> Self { Self::min_value() }
+        #[inline]
         fn max_value() -> Self { Self::max_value() }
+        #[inline]
         fn from_u32(u: u32) -> Self { u as Self }
+        #[inline]
         fn checked_mul(&self, other: u32) -> Option<Self> {
             Self::checked_mul(*self, other as Self)
         }
+        #[inline]
         fn checked_sub(&self, other: u32) -> Option<Self> {
             Self::checked_sub(*self, other as Self)
         }
+        #[inline]
         fn checked_add(&self, other: u32) -> Option<Self> {
             Self::checked_add(*self, other as Self)
         }
@@ -2716,3 +3427,106 @@ impl_from! { u32, f64, #[stable(feature = "lossless_float_conv", since = "1.6.0"
 
 // Float -> Float
 impl_from! { f32, f64, #[stable(feature = "lossless_float_conv", since = "1.6.0")] }
+
+static ASCII_LOWERCASE_MAP: [u8; 256] = [
+    0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+    0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+    0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
+    0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
+    b' ', b'!', b'"', b'#', b'$', b'%', b'&', b'\'',
+    b'(', b')', b'*', b'+', b',', b'-', b'.', b'/',
+    b'0', b'1', b'2', b'3', b'4', b'5', b'6', b'7',
+    b'8', b'9', b':', b';', b'<', b'=', b'>', b'?',
+    b'@',
+
+          b'a', b'b', b'c', b'd', b'e', b'f', b'g',
+    b'h', b'i', b'j', b'k', b'l', b'm', b'n', b'o',
+    b'p', b'q', b'r', b's', b't', b'u', b'v', b'w',
+    b'x', b'y', b'z',
+
+                      b'[', b'\\', b']', b'^', b'_',
+    b'`', b'a', b'b', b'c', b'd', b'e', b'f', b'g',
+    b'h', b'i', b'j', b'k', b'l', b'm', b'n', b'o',
+    b'p', b'q', b'r', b's', b't', b'u', b'v', b'w',
+    b'x', b'y', b'z', b'{', b'|', b'}', b'~', 0x7f,
+    0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87,
+    0x88, 0x89, 0x8a, 0x8b, 0x8c, 0x8d, 0x8e, 0x8f,
+    0x90, 0x91, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97,
+    0x98, 0x99, 0x9a, 0x9b, 0x9c, 0x9d, 0x9e, 0x9f,
+    0xa0, 0xa1, 0xa2, 0xa3, 0xa4, 0xa5, 0xa6, 0xa7,
+    0xa8, 0xa9, 0xaa, 0xab, 0xac, 0xad, 0xae, 0xaf,
+    0xb0, 0xb1, 0xb2, 0xb3, 0xb4, 0xb5, 0xb6, 0xb7,
+    0xb8, 0xb9, 0xba, 0xbb, 0xbc, 0xbd, 0xbe, 0xbf,
+    0xc0, 0xc1, 0xc2, 0xc3, 0xc4, 0xc5, 0xc6, 0xc7,
+    0xc8, 0xc9, 0xca, 0xcb, 0xcc, 0xcd, 0xce, 0xcf,
+    0xd0, 0xd1, 0xd2, 0xd3, 0xd4, 0xd5, 0xd6, 0xd7,
+    0xd8, 0xd9, 0xda, 0xdb, 0xdc, 0xdd, 0xde, 0xdf,
+    0xe0, 0xe1, 0xe2, 0xe3, 0xe4, 0xe5, 0xe6, 0xe7,
+    0xe8, 0xe9, 0xea, 0xeb, 0xec, 0xed, 0xee, 0xef,
+    0xf0, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6, 0xf7,
+    0xf8, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff,
+];
+
+static ASCII_UPPERCASE_MAP: [u8; 256] = [
+    0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+    0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+    0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
+    0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
+    b' ', b'!', b'"', b'#', b'$', b'%', b'&', b'\'',
+    b'(', b')', b'*', b'+', b',', b'-', b'.', b'/',
+    b'0', b'1', b'2', b'3', b'4', b'5', b'6', b'7',
+    b'8', b'9', b':', b';', b'<', b'=', b'>', b'?',
+    b'@', b'A', b'B', b'C', b'D', b'E', b'F', b'G',
+    b'H', b'I', b'J', b'K', b'L', b'M', b'N', b'O',
+    b'P', b'Q', b'R', b'S', b'T', b'U', b'V', b'W',
+    b'X', b'Y', b'Z', b'[', b'\\', b']', b'^', b'_',
+    b'`',
+
+          b'A', b'B', b'C', b'D', b'E', b'F', b'G',
+    b'H', b'I', b'J', b'K', b'L', b'M', b'N', b'O',
+    b'P', b'Q', b'R', b'S', b'T', b'U', b'V', b'W',
+    b'X', b'Y', b'Z',
+
+                      b'{', b'|', b'}', b'~', 0x7f,
+    0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87,
+    0x88, 0x89, 0x8a, 0x8b, 0x8c, 0x8d, 0x8e, 0x8f,
+    0x90, 0x91, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97,
+    0x98, 0x99, 0x9a, 0x9b, 0x9c, 0x9d, 0x9e, 0x9f,
+    0xa0, 0xa1, 0xa2, 0xa3, 0xa4, 0xa5, 0xa6, 0xa7,
+    0xa8, 0xa9, 0xaa, 0xab, 0xac, 0xad, 0xae, 0xaf,
+    0xb0, 0xb1, 0xb2, 0xb3, 0xb4, 0xb5, 0xb6, 0xb7,
+    0xb8, 0xb9, 0xba, 0xbb, 0xbc, 0xbd, 0xbe, 0xbf,
+    0xc0, 0xc1, 0xc2, 0xc3, 0xc4, 0xc5, 0xc6, 0xc7,
+    0xc8, 0xc9, 0xca, 0xcb, 0xcc, 0xcd, 0xce, 0xcf,
+    0xd0, 0xd1, 0xd2, 0xd3, 0xd4, 0xd5, 0xd6, 0xd7,
+    0xd8, 0xd9, 0xda, 0xdb, 0xdc, 0xdd, 0xde, 0xdf,
+    0xe0, 0xe1, 0xe2, 0xe3, 0xe4, 0xe5, 0xe6, 0xe7,
+    0xe8, 0xe9, 0xea, 0xeb, 0xec, 0xed, 0xee, 0xef,
+    0xf0, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6, 0xf7,
+    0xf8, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff,
+];
+
+enum AsciiCharacterClass {
+    C,  // control
+    Cw, // control whitespace
+    W,  // whitespace
+    D,  // digit
+    L,  // lowercase
+    Lx, // lowercase hex digit
+    U,  // uppercase
+    Ux, // uppercase hex digit
+    P,  // punctuation
+}
+use self::AsciiCharacterClass::*;
+
+static ASCII_CHARACTER_CLASS: [AsciiCharacterClass; 128] = [
+//  _0 _1 _2 _3 _4 _5 _6 _7 _8 _9 _a _b _c _d _e _f
+    C, C, C, C, C, C, C, C, C, Cw,Cw,C, Cw,Cw,C, C, // 0_
+    C, C, C, C, C, C, C, C, C, C, C, C, C, C, C, C, // 1_
+    W, P, P, P, P, P, P, P, P, P, P, P, P, P, P, P, // 2_
+    D, D, D, D, D, D, D, D, D, D, P, P, P, P, P, P, // 3_
+    P, Ux,Ux,Ux,Ux,Ux,Ux,U, U, U, U, U, U, U, U, U, // 4_
+    U, U, U, U, U, U, U, U, U, U, U, P, P, P, P, P, // 5_
+    P, Lx,Lx,Lx,Lx,Lx,Lx,L, L, L, L, L, L, L, L, L, // 6_
+    L, L, L, L, L, L, L, L, L, L, L, P, P, P, P, C, // 7_
+];

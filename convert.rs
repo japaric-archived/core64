@@ -48,8 +48,25 @@
 
 #![stable(feature = "rust1", since = "1.0.0")]
 
-use str::FromStr;
+use fmt;
 
+/// A type used as the error type for implementations of fallible conversion
+/// traits in cases where conversions cannot actually fail.
+///
+/// Because `Infallible` has no variants, a value of this type can never exist.
+/// It is used only to satisfy trait signatures that expect an error type, and
+/// signals to both the compiler and the user that the error case is impossible.
+#[unstable(feature = "try_from", issue = "33417")]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum Infallible {}
+
+#[unstable(feature = "try_from", issue = "33417")]
+impl fmt::Display for Infallible {
+    fn fmt(&self, _: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+        }
+    }
+}
 /// A cheap reference-to-reference conversion. Used to convert a value to a
 /// reference value within generic code.
 ///
@@ -71,7 +88,7 @@ use str::FromStr;
 ///
 /// See [the book][book] for a more detailed comparison.
 ///
-/// [book]: ../../book/borrow-and-asref.html
+/// [book]: ../../book/first-edition/borrow-and-asref.html
 /// [`Borrow`]: ../../std/borrow/trait.Borrow.html
 ///
 /// **Note: this trait must not fail**. If the conversion can fail, use a
@@ -305,7 +322,7 @@ pub trait Into<T>: Sized {
 /// [`String`]: ../../std/string/struct.String.html
 /// [`Into<U>`]: trait.Into.html
 /// [`from`]: trait.From.html#tymethod.from
-/// [book]: ../../book/error-handling.html
+/// [book]: ../../book/first-edition/error-handling.html
 #[stable(feature = "rust1", since = "1.0.0")]
 pub trait From<T>: Sized {
     /// Performs the conversion.
@@ -417,6 +434,17 @@ impl<T, U> TryInto<U> for T where U: TryFrom<T>
     }
 }
 
+// Infallible conversions are semantically equivalent to fallible conversions
+// with an uninhabited error type.
+#[unstable(feature = "try_from", issue = "33417")]
+impl<T, U> TryFrom<U> for T where T: From<U> {
+    type Error = Infallible;
+
+    fn try_from(value: U) -> Result<Self, Self::Error> {
+        Ok(T::from(value))
+    }
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // CONCRETE IMPLS
 ////////////////////////////////////////////////////////////////////////////////
@@ -440,16 +468,5 @@ impl AsRef<str> for str {
     #[inline]
     fn as_ref(&self) -> &str {
         self
-    }
-}
-
-// FromStr implies TryFrom<&str>
-#[unstable(feature = "try_from", issue = "33417")]
-impl<'a, T> TryFrom<&'a str> for T where T: FromStr
-{
-    type Error = <T as FromStr>::Err;
-
-    fn try_from(s: &'a str) -> Result<T, Self::Error> {
-        FromStr::from_str(s)
     }
 }
