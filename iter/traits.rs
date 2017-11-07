@@ -147,22 +147,13 @@ pub trait FromIterator<A>: Sized {
 ///
 /// ```
 /// let v = vec![1, 2, 3];
-///
 /// let mut iter = v.into_iter();
 ///
-/// let n = iter.next();
-/// assert_eq!(Some(1), n);
-///
-/// let n = iter.next();
-/// assert_eq!(Some(2), n);
-///
-/// let n = iter.next();
-/// assert_eq!(Some(3), n);
-///
-/// let n = iter.next();
-/// assert_eq!(None, n);
+/// assert_eq!(Some(1), iter.next());
+/// assert_eq!(Some(2), iter.next());
+/// assert_eq!(Some(3), iter.next());
+/// assert_eq!(None, iter.next());
 /// ```
-///
 /// Implementing `IntoIterator` for your type:
 ///
 /// ```
@@ -205,6 +196,23 @@ pub trait FromIterator<A>: Sized {
 ///     assert_eq!(i as i32, n);
 /// }
 /// ```
+///
+/// It is common to use `IntoIterator` as a trait bound. This allows
+/// the input collection type to change, so long as it is still an
+/// iterator. Additional bounds can be specified by restricting on
+/// `Item`:
+///
+/// ```rust
+/// fn collect_as_strings<T>(collection: T) -> Vec<String>
+///     where T: IntoIterator,
+///           T::Item : std::fmt::Debug,
+/// {
+///     collection
+///         .into_iter()
+///         .map(|item| format!("{:?}", item))
+///         .collect()
+/// }
+/// ```
 #[stable(feature = "rust1", since = "1.0.0")]
 pub trait IntoIterator {
     /// The type of the elements being iterated over.
@@ -227,20 +235,12 @@ pub trait IntoIterator {
     ///
     /// ```
     /// let v = vec![1, 2, 3];
-    ///
     /// let mut iter = v.into_iter();
     ///
-    /// let n = iter.next();
-    /// assert_eq!(Some(1), n);
-    ///
-    /// let n = iter.next();
-    /// assert_eq!(Some(2), n);
-    ///
-    /// let n = iter.next();
-    /// assert_eq!(Some(3), n);
-    ///
-    /// let n = iter.next();
-    /// assert_eq!(None, n);
+    /// assert_eq!(Some(1), iter.next());
+    /// assert_eq!(Some(2), iter.next());
+    /// assert_eq!(Some(3), iter.next());
+    /// assert_eq!(None, iter.next());
     /// ```
     #[stable(feature = "rust1", since = "1.0.0")]
     fn into_iter(self) -> Self::IntoIter;
@@ -362,7 +362,7 @@ pub trait Extend<A> {
 /// In a similar fashion to the [`Iterator`] protocol, once a
 /// `DoubleEndedIterator` returns `None` from a `next_back()`, calling it again
 /// may or may not ever return `Some` again. `next()` and `next_back()` are
-/// interchangable for this purpose.
+/// interchangeable for this purpose.
 ///
 /// [`Iterator`]: trait.Iterator.html
 ///
@@ -414,6 +414,70 @@ pub trait DoubleEndedIterator: Iterator {
     /// ```
     #[stable(feature = "rust1", since = "1.0.0")]
     fn next_back(&mut self) -> Option<Self::Item>;
+
+    /// An iterator method that reduces the iterator's elements to a single,
+    /// final value, starting from the back.
+    ///
+    /// This is the reverse version of [`fold()`]: it takes elements starting from
+    /// the back of the iterator.
+    ///
+    /// `rfold()` takes two arguments: an initial value, and a closure with two
+    /// arguments: an 'accumulator', and an element. The closure returns the value that
+    /// the accumulator should have for the next iteration.
+    ///
+    /// The initial value is the value the accumulator will have on the first
+    /// call.
+    ///
+    /// After applying this closure to every element of the iterator, `rfold()`
+    /// returns the accumulator.
+    ///
+    /// This operation is sometimes called 'reduce' or 'inject'.
+    ///
+    /// Folding is useful whenever you have a collection of something, and want
+    /// to produce a single value from it.
+    ///
+    /// [`fold()`]: trait.Iterator.html#method.fold
+    ///
+    /// # Examples
+    ///
+    /// Basic usage:
+    ///
+    /// ```
+    /// #![feature(iter_rfold)]
+    /// let a = [1, 2, 3];
+    ///
+    /// // the sum of all of the elements of a
+    /// let sum = a.iter()
+    ///            .rfold(0, |acc, &x| acc + x);
+    ///
+    /// assert_eq!(sum, 6);
+    /// ```
+    ///
+    /// This example builds a string, starting with an initial value
+    /// and continuing with each element from the back until the front:
+    ///
+    /// ```
+    /// #![feature(iter_rfold)]
+    /// let numbers = [1, 2, 3, 4, 5];
+    ///
+    /// let zero = "0".to_string();
+    ///
+    /// let result = numbers.iter().rfold(zero, |acc, &x| {
+    ///     format!("({} + {})", x, acc)
+    /// });
+    ///
+    /// assert_eq!(result, "(1 + (2 + (3 + (4 + (5 + 0)))))");
+    /// ```
+    #[inline]
+    #[unstable(feature = "iter_rfold", issue = "44705")]
+    fn rfold<B, F>(mut self, mut accum: B, mut f: F) -> B where
+        Self: Sized, F: FnMut(B, Self::Item) -> B,
+    {
+        while let Some(x) = self.next_back() {
+            accum = f(accum, x);
+        }
+        accum
+    }
 
     /// Searches for an element of an iterator from the right that satisfies a predicate.
     ///
@@ -761,7 +825,7 @@ impl<I, T, E> ResultShunt<I, E>
 
     fn new(iter: I) -> Self {
         ResultShunt {
-            iter: iter,
+            iter,
             error: None,
         }
     }
@@ -798,6 +862,23 @@ impl<I, T, E> Iterator for ResultShunt<I, E>
 impl<T, U, E> Sum<Result<U, E>> for Result<T, E>
     where T: Sum<U>,
 {
+    /// Takes each element in the `Iterator`: if it is an `Err`, no further
+    /// elements are taken, and the `Err` is returned. Should no `Err` occur,
+    /// the sum of all elements is returned.
+    ///
+    /// # Examples
+    ///
+    /// This sums up every integer in a vector, rejecting the sum if a negative
+    /// element is encountered:
+    ///
+    /// ```
+    /// let v = vec![1, 2];
+    /// let res: Result<i32, &'static str> = v.iter().map(|&x: &i32|
+    ///     if x < 0 { Err("Negative element found") }
+    ///     else { Ok(x) }
+    /// ).sum();
+    /// assert_eq!(res, Ok(3));
+    /// ```
     fn sum<I>(iter: I) -> Result<T, E>
         where I: Iterator<Item = Result<U, E>>,
     {
@@ -809,6 +890,9 @@ impl<T, U, E> Sum<Result<U, E>> for Result<T, E>
 impl<T, U, E> Product<Result<U, E>> for Result<T, E>
     where T: Product<U>,
 {
+    /// Takes each element in the `Iterator`: if it is an `Err`, no further
+    /// elements are taken, and the `Err` is returned. Should no `Err` occur,
+    /// the product of all elements is returned.
     fn product<I>(iter: I) -> Result<T, E>
         where I: Iterator<Item = Result<U, E>>,
     {
@@ -819,7 +903,7 @@ impl<T, U, E> Product<Result<U, E>> for Result<T, E>
 /// An iterator that always continues to yield `None` when exhausted.
 ///
 /// Calling next on a fused iterator that has returned `None` once is guaranteed
-/// to return [`None`] again. This trait is should be implemented by all iterators
+/// to return [`None`] again. This trait should be implemented by all iterators
 /// that behave this way because it allows for some significant optimizations.
 ///
 /// Note: In general, you should not use `FusedIterator` in generic bounds if

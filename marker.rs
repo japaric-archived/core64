@@ -46,6 +46,8 @@ pub unsafe trait Send {
 }
 
 #[stable(feature = "rust1", since = "1.0.0")]
+#[allow(unknown_lints)]
+#[allow(auto_impl)]
 unsafe impl Send for .. { }
 
 #[stable(feature = "rust1", since = "1.0.0")]
@@ -85,7 +87,7 @@ impl<T: ?Sized> !Send for *mut T { }
 ///                         // be made into an object
 /// ```
 ///
-/// [trait object]: ../../book/trait-objects.html
+/// [trait object]: ../../book/first-edition/trait-objects.html
 #[stable(feature = "rust1", since = "1.0.0")]
 #[lang = "sized"]
 #[rustc_on_unimplemented = "`{Self}` does not have a constant size known at compile-time"]
@@ -122,7 +124,7 @@ pub trait Sized {
 /// [RFC982]: https://github.com/rust-lang/rfcs/blob/master/text/0982-dst-coercion.md
 /// [nomicon-coerce]: ../../nomicon/coercions.html
 #[unstable(feature = "unsize", issue = "27732")]
-#[lang="unsize"]
+#[lang = "unsize"]
 pub trait Unsize<T: ?Sized> {
     // Empty.
 }
@@ -205,7 +207,7 @@ pub trait Unsize<T: ?Sized> {
 /// but not `Copy`.
 ///
 /// [`Clone`] is a supertrait of `Copy`, so everything which is `Copy` must also implement
-/// [`Clone`]. If a type is `Copy` then its [`Clone`] implementation need only return `*self`
+/// [`Clone`]. If a type is `Copy` then its [`Clone`] implementation only needs to return `*self`
 /// (see the example above).
 ///
 /// ## When can my type be `Copy`?
@@ -349,6 +351,8 @@ pub unsafe trait Sync {
 }
 
 #[stable(feature = "rust1", since = "1.0.0")]
+#[allow(unknown_lints)]
+#[allow(auto_impl)]
 unsafe impl Sync for .. { }
 
 #[stable(feature = "rust1", since = "1.0.0")]
@@ -434,7 +438,7 @@ macro_rules! impls{
 /// example, here is a struct `Slice` that has two pointers of type `*const T`,
 /// presumably pointing into an array somewhere:
 ///
-/// ```ignore
+/// ```compile_fail,E0392
 /// struct Slice<'a, T> {
 ///     start: *const T,
 ///     end: *const T,
@@ -493,7 +497,7 @@ macro_rules! impls{
 /// types. We track the Rust type using a phantom type parameter on
 /// the struct `ExternalResource` which wraps a handle.
 ///
-/// [FFI]: ../../book/ffi.html
+/// [FFI]: ../../book/first-edition/ffi.html
 ///
 /// ```
 /// # #![allow(dead_code)]
@@ -562,6 +566,8 @@ mod impls {
 #[lang = "freeze"]
 unsafe trait Freeze {}
 
+#[allow(unknown_lints)]
+#[allow(auto_impl)]
 unsafe impl Freeze for .. {}
 
 impl<T: ?Sized> !Freeze for UnsafeCell<T> {}

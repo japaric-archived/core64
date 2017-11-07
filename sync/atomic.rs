@@ -119,7 +119,9 @@ pub fn hint_core_should_pause()
 
 /// A boolean type which can be safely shared between threads.
 ///
-/// This type has the same in-memory representation as a `bool`.
+/// This type has the same in-memory representation as a [`bool`].
+///
+/// [`bool`]: ../../../std/primitive.bool.html
 #[cfg(target_has_atomic = "8")]
 #[stable(feature = "rust1", since = "1.0.0")]
 pub struct AtomicBool {
@@ -241,14 +243,17 @@ impl AtomicBool {
     /// ```
     #[inline]
     #[stable(feature = "rust1", since = "1.0.0")]
+    #[rustc_const_unstable(feature = "const_atomic_bool_new")]
     pub const fn new(v: bool) -> AtomicBool {
         AtomicBool { v: UnsafeCell::new(v as u8) }
     }
 
-    /// Returns a mutable reference to the underlying `bool`.
+    /// Returns a mutable reference to the underlying [`bool`].
     ///
     /// This is safe because the mutable reference guarantees that no other threads are
     /// concurrently accessing the atomic data.
+    ///
+    /// [`bool`]: ../../../std/primitive.bool.html
     ///
     /// # Examples
     ///
@@ -368,7 +373,7 @@ impl AtomicBool {
         unsafe { atomic_swap(self.v.get(), val as u8, order) != 0 }
     }
 
-    /// Stores a value into the `bool` if the current value is the same as the `current` value.
+    /// Stores a value into the [`bool`] if the current value is the same as the `current` value.
     ///
     /// The return value is always the previous value. If it is equal to `current`, then the value
     /// was updated.
@@ -377,6 +382,7 @@ impl AtomicBool {
     /// ordering of this operation.
     ///
     /// [`Ordering`]: enum.Ordering.html
+    /// [`bool`]: ../../../std/primitive.bool.html
     ///
     /// # Examples
     ///
@@ -400,7 +406,7 @@ impl AtomicBool {
         }
     }
 
-    /// Stores a value into the `bool` if the current value is the same as the `current` value.
+    /// Stores a value into the [`bool`] if the current value is the same as the `current` value.
     ///
     /// The return value is a result indicating whether the new value was written and containing
     /// the previous value. On success this value is guaranteed to be equal to `current`.
@@ -411,6 +417,7 @@ impl AtomicBool {
     /// operation fails. The failure ordering can't be [`Release`] or [`AcqRel`] and must
     /// be equivalent or weaker than the success ordering.
     ///
+    /// [`bool`]: ../../../std/primitive.bool.html
     /// [`Ordering`]: enum.Ordering.html
     /// [`Release`]: enum.Ordering.html#variant.Release
     /// [`AcqRel`]: enum.Ordering.html#variant.Release
@@ -451,7 +458,7 @@ impl AtomicBool {
         }
     }
 
-    /// Stores a value into the `bool` if the current value is the same as the `current` value.
+    /// Stores a value into the [`bool`] if the current value is the same as the `current` value.
     ///
     /// Unlike [`compare_exchange`], this function is allowed to spuriously fail even when the
     /// comparison succeeds, which can result in more efficient code on some platforms. The
@@ -464,6 +471,7 @@ impl AtomicBool {
     /// failure ordering can't be [`Release`] or [`AcqRel`] and must be equivalent or
     /// weaker than the success ordering.
     ///
+    /// [`bool`]: ../../../std/primitive.bool.html
     /// [`compare_exchange`]: #method.compare_exchange
     /// [`Ordering`]: enum.Ordering.html
     /// [`Release`]: enum.Ordering.html#variant.Release
@@ -649,6 +657,7 @@ impl<T> AtomicPtr<T> {
     /// ```
     #[inline]
     #[stable(feature = "rust1", since = "1.0.0")]
+    #[rustc_const_unstable(feature = "const_atomic_ptr_new")]
     pub const fn new(p: *mut T) -> AtomicPtr<T> {
         AtomicPtr { p: UnsafeCell::new(p) }
     }
@@ -919,15 +928,36 @@ impl<T> AtomicPtr<T> {
 }
 
 #[cfg(target_has_atomic = "ptr")]
+#[stable(feature = "atomic_from", since = "1.23.0")]
+impl<T> From<*mut T> for AtomicPtr<T> {
+    #[inline]
+    fn from(p: *mut T) -> Self { Self::new(p) }
+}
+
+#[cfg(target_has_atomic = "ptr")]
 macro_rules! atomic_int {
-    ($stable:meta,
+    ($stable:meta, $const_unstable:meta,
      $stable_cxchg:meta,
      $stable_debug:meta,
      $stable_access:meta,
+     $s_int_type:expr, $int_ref:expr,
      $int_type:ident $atomic_type:ident $atomic_init:ident) => {
         /// An integer type which can be safely shared between threads.
         ///
-        /// This type has the same in-memory representation as the underlying integer type.
+        /// This type has the same in-memory representation as the underlying
+        /// integer type, [`
+        #[doc = $s_int_type]
+        /// `](
+        #[doc = $int_ref]
+        /// ). For more about the differences between atomic types and
+        /// non-atomic types, please see the [module-level documentation].
+        ///
+        /// Please note that examples are shared between atomic variants of
+        /// primitive integer types, so it's normal that they are all
+        /// demonstrating [`AtomicIsize`].
+        ///
+        /// [module-level documentation]: index.html
+        /// [`AtomicIsize`]: struct.AtomicIsize.html
         #[$stable]
         pub struct $atomic_type {
             v: UnsafeCell<$int_type>,
@@ -942,6 +972,12 @@ macro_rules! atomic_int {
             fn default() -> Self {
                 Self::new(Default::default())
             }
+        }
+
+        #[stable(feature = "atomic_from", since = "1.23.0")]
+        impl From<$int_type> for $atomic_type {
+            #[inline]
+            fn from(v: $int_type) -> Self { Self::new(v) }
         }
 
         #[$stable_debug]
@@ -969,6 +1005,7 @@ macro_rules! atomic_int {
             /// ```
             #[inline]
             #[$stable]
+            #[$const_unstable]
             pub const fn new(v: $int_type) -> Self {
                 $atomic_type {v: UnsafeCell::new(v)}
             }
@@ -1332,81 +1369,101 @@ macro_rules! atomic_int {
 #[cfg(target_has_atomic = "8")]
 atomic_int! {
     unstable(feature = "integer_atomics", issue = "32976"),
+    rustc_const_unstable(feature = "const_atomic_i8_new"),
     unstable(feature = "integer_atomics", issue = "32976"),
     unstable(feature = "integer_atomics", issue = "32976"),
     unstable(feature = "integer_atomics", issue = "32976"),
+    "i8", "../../../std/primitive.i8.html",
     i8 AtomicI8 ATOMIC_I8_INIT
 }
 #[cfg(target_has_atomic = "8")]
 atomic_int! {
     unstable(feature = "integer_atomics", issue = "32976"),
+    rustc_const_unstable(feature = "const_atomic_u8_new"),
     unstable(feature = "integer_atomics", issue = "32976"),
     unstable(feature = "integer_atomics", issue = "32976"),
     unstable(feature = "integer_atomics", issue = "32976"),
+    "u8", "../../../std/primitive.u8.html",
     u8 AtomicU8 ATOMIC_U8_INIT
 }
 #[cfg(target_has_atomic = "16")]
 atomic_int! {
     unstable(feature = "integer_atomics", issue = "32976"),
+    rustc_const_unstable(feature = "const_atomic_i16_new"),
     unstable(feature = "integer_atomics", issue = "32976"),
     unstable(feature = "integer_atomics", issue = "32976"),
     unstable(feature = "integer_atomics", issue = "32976"),
+    "i16", "../../../std/primitive.i16.html",
     i16 AtomicI16 ATOMIC_I16_INIT
 }
 #[cfg(target_has_atomic = "16")]
 atomic_int! {
     unstable(feature = "integer_atomics", issue = "32976"),
+    rustc_const_unstable(feature = "const_atomic_u16_new"),
     unstable(feature = "integer_atomics", issue = "32976"),
     unstable(feature = "integer_atomics", issue = "32976"),
     unstable(feature = "integer_atomics", issue = "32976"),
+    "u16", "../../../std/primitive.u16.html",
     u16 AtomicU16 ATOMIC_U16_INIT
 }
 #[cfg(target_has_atomic = "32")]
 atomic_int! {
     unstable(feature = "integer_atomics", issue = "32976"),
+    rustc_const_unstable(feature = "const_atomic_i32_new"),
     unstable(feature = "integer_atomics", issue = "32976"),
     unstable(feature = "integer_atomics", issue = "32976"),
     unstable(feature = "integer_atomics", issue = "32976"),
+    "i32", "../../../std/primitive.i32.html",
     i32 AtomicI32 ATOMIC_I32_INIT
 }
 #[cfg(target_has_atomic = "32")]
 atomic_int! {
     unstable(feature = "integer_atomics", issue = "32976"),
+    rustc_const_unstable(feature = "const_atomic_u32_new"),
     unstable(feature = "integer_atomics", issue = "32976"),
     unstable(feature = "integer_atomics", issue = "32976"),
     unstable(feature = "integer_atomics", issue = "32976"),
+    "u32", "../../../std/primitive.u32.html",
     u32 AtomicU32 ATOMIC_U32_INIT
 }
 #[cfg(target_has_atomic = "64")]
 atomic_int! {
     unstable(feature = "integer_atomics", issue = "32976"),
+    rustc_const_unstable(feature = "const_atomic_i64_new"),
     unstable(feature = "integer_atomics", issue = "32976"),
     unstable(feature = "integer_atomics", issue = "32976"),
     unstable(feature = "integer_atomics", issue = "32976"),
+    "i64", "../../../std/primitive.i64.html",
     i64 AtomicI64 ATOMIC_I64_INIT
 }
 #[cfg(target_has_atomic = "64")]
 atomic_int! {
     unstable(feature = "integer_atomics", issue = "32976"),
+    rustc_const_unstable(feature = "const_atomic_u64_new"),
     unstable(feature = "integer_atomics", issue = "32976"),
     unstable(feature = "integer_atomics", issue = "32976"),
     unstable(feature = "integer_atomics", issue = "32976"),
+    "u64", "../../../std/primitive.u64.html",
     u64 AtomicU64 ATOMIC_U64_INIT
 }
 #[cfg(target_has_atomic = "ptr")]
 atomic_int!{
     stable(feature = "rust1", since = "1.0.0"),
+    rustc_const_unstable(feature = "const_atomic_isize_new"),
     stable(feature = "extended_compare_and_swap", since = "1.10.0"),
     stable(feature = "atomic_debug", since = "1.3.0"),
     stable(feature = "atomic_access", since = "1.15.0"),
+    "isize", "../../../std/primitive.isize.html",
     isize AtomicIsize ATOMIC_ISIZE_INIT
 }
 #[cfg(target_has_atomic = "ptr")]
 atomic_int!{
     stable(feature = "rust1", since = "1.0.0"),
+    rustc_const_unstable(feature = "const_atomic_usize_new"),
     stable(feature = "extended_compare_and_swap", since = "1.10.0"),
     stable(feature = "atomic_debug", since = "1.3.0"),
     stable(feature = "atomic_access", since = "1.15.0"),
+    "usize", "../../../std/primitive.usize.html",
     usize AtomicUsize ATOMIC_USIZE_INIT
 }
 
@@ -1632,7 +1689,7 @@ unsafe fn atomic_xor<T>(dst: *mut T, val: T, order: Ordering) -> T {
 ///
 ///     pub fn lock(&self) {
 ///         while !self.flag.compare_and_swap(false, true, Ordering::Relaxed) {}
-///         // This fence syncronizes-with store in `unlock`.
+///         // This fence synchronizes-with store in `unlock`.
 ///         fence(Ordering::Acquire);
 ///     }
 ///
@@ -1666,10 +1723,14 @@ pub fn fence(order: Ordering) {
 
 /// A compiler memory fence.
 ///
-/// `compiler_fence` does not emit any machine code, but prevents the compiler from re-ordering
-/// memory operations across this point. Which reorderings are disallowed is dictated by the given
-/// [`Ordering`]. Note that `compiler_fence` does *not* introduce inter-thread memory
-/// synchronization; for that, a [`fence`] is needed.
+/// `compiler_fence` does not emit any machine code, but restricts the kinds
+/// of memory re-ordering the compiler is allowed to do. Specifically, depending on
+/// the given [`Ordering`] semantics, the compiler may be disallowed from moving reads
+/// or writes from before or after the call to the other side of the call to
+/// `compiler_fence`. Note that it does **not** prevent the *hardware*
+/// from doing such re-ordering. This is not a problem in a single-threaded,
+/// execution context, but when other threads may modify memory at the same
+/// time, stronger synchronization primitives such as [`fence`] are required.
 ///
 /// The re-ordering prevented by the different ordering semantics are:
 ///
@@ -1678,9 +1739,53 @@ pub fn fence(order: Ordering) {
 ///  - with [`Acquire`], subsequent reads and writes cannot be moved ahead of preceding reads.
 ///  - with [`AcqRel`], both of the above rules are enforced.
 ///
+/// `compiler_fence` is generally only useful for preventing a thread from
+/// racing *with itself*. That is, if a given thread is executing one piece
+/// of code, and is then interrupted, and starts executing code elsewhere
+/// (while still in the same thread, and conceptually still on the same
+/// core). In traditional programs, this can only occur when a signal
+/// handler is registered. In more low-level code, such situations can also
+/// arise when handling interrupts, when implementing green threads with
+/// pre-emption, etc. Curious readers are encouraged to read the Linux kernel's
+/// discussion of [memory barriers].
+///
 /// # Panics
 ///
 /// Panics if `order` is [`Relaxed`].
+///
+/// # Examples
+///
+/// Without `compiler_fence`, the `assert_eq!` in following code
+/// is *not* guaranteed to succeed, despite everything happening in a single thread.
+/// To see why, remember that the compiler is free to swap the stores to
+/// `IMPORTANT_VARIABLE` and `IS_READ` since they are both
+/// `Ordering::Relaxed`. If it does, and the signal handler is invoked right
+/// after `IS_READY` is updated, then the signal handler will see
+/// `IS_READY=1`, but `IMPORTANT_VARIABLE=0`.
+/// Using a `compiler_fence` remedies this situation.
+///
+/// ```
+/// use std::sync::atomic::{AtomicBool, AtomicUsize};
+/// use std::sync::atomic::{ATOMIC_BOOL_INIT, ATOMIC_USIZE_INIT};
+/// use std::sync::atomic::Ordering;
+/// use std::sync::atomic::compiler_fence;
+///
+/// static IMPORTANT_VARIABLE: AtomicUsize = ATOMIC_USIZE_INIT;
+/// static IS_READY: AtomicBool = ATOMIC_BOOL_INIT;
+///
+/// fn main() {
+///     IMPORTANT_VARIABLE.store(42, Ordering::Relaxed);
+///     // prevent earlier writes from being moved beyond this point
+///     compiler_fence(Ordering::Release);
+///     IS_READY.store(true, Ordering::Relaxed);
+/// }
+///
+/// fn signal_handler() {
+///     if IS_READY.load(Ordering::Relaxed) {
+///         assert_eq!(IMPORTANT_VARIABLE.load(Ordering::Relaxed), 42);
+///     }
+/// }
+/// ```
 ///
 /// [`fence`]: fn.fence.html
 /// [`Ordering`]: enum.Ordering.html
@@ -1689,8 +1794,9 @@ pub fn fence(order: Ordering) {
 /// [`Release`]: enum.Ordering.html#variant.Release
 /// [`AcqRel`]: enum.Ordering.html#variant.AcqRel
 /// [`Relaxed`]: enum.Ordering.html#variant.Relaxed
+/// [memory barriers]: https://www.kernel.org/doc/Documentation/memory-barriers.txt
 #[inline]
-#[unstable(feature = "compiler_fences", issue = "41091")]
+#[stable(feature = "compiler_fences", since = "1.21.0")]
 pub fn compiler_fence(order: Ordering) {
     unsafe {
         match order {

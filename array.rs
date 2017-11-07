@@ -21,6 +21,7 @@
 
 use borrow::{Borrow, BorrowMut};
 use cmp::Ordering;
+use convert::TryFrom;
 use fmt;
 use hash::{Hash, self};
 use marker::Unsize;
@@ -57,6 +58,30 @@ unsafe impl<T, A: Unsize<[T]>> FixedSizeArray<T> for A {
     }
 }
 
+/// The error type returned when a conversion from a slice to an array fails.
+#[unstable(feature = "try_from", issue = "33417")]
+#[derive(Debug, Copy, Clone)]
+pub struct TryFromSliceError(());
+
+impl fmt::Display for TryFromSliceError {
+    #[inline]
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Display::fmt(self.__description(), f)
+    }
+}
+
+impl TryFromSliceError {
+    #[unstable(feature = "array_error_internals",
+           reason = "available through Error trait and this method should not \
+                     be exposed publicly",
+           issue = "0")]
+    #[inline]
+    #[doc(hidden)]
+    pub fn __description(&self) -> &str {
+        "could not convert slice to array"
+    }
+}
+
 macro_rules! __impl_slice_eq1 {
     ($Lhs: ty, $Rhs: ty) => {
         __impl_slice_eq1! { $Lhs, $Rhs, Sized }
@@ -89,7 +114,7 @@ macro_rules! __impl_slice_eq2 {
     }
 }
 
-// macro for implementing n-ary tuple functions and operations
+// macro for implementing n-element array functions and operations
 macro_rules! array_impls {
     ($($N:expr)+) => {
         $(
@@ -123,10 +148,31 @@ macro_rules! array_impls {
                 }
             }
 
-            #[stable(feature = "rust1", since = "1.0.0")]
-            impl<T:Copy> Clone for [T; $N] {
-                fn clone(&self) -> [T; $N] {
-                    *self
+            #[unstable(feature = "try_from", issue = "33417")]
+            impl<'a, T> TryFrom<&'a [T]> for &'a [T; $N] {
+                type Error = TryFromSliceError;
+
+                fn try_from(slice: &[T]) -> Result<&[T; $N], TryFromSliceError> {
+                    if slice.len() == $N {
+                        let ptr = slice.as_ptr() as *const [T; $N];
+                        unsafe { Ok(&*ptr) }
+                    } else {
+                        Err(TryFromSliceError(()))
+                    }
+                }
+            }
+
+            #[unstable(feature = "try_from", issue = "33417")]
+            impl<'a, T> TryFrom<&'a mut [T]> for &'a mut [T; $N] {
+                type Error = TryFromSliceError;
+
+                fn try_from(slice: &mut [T]) -> Result<&mut [T; $N], TryFromSliceError> {
+                    if slice.len() == $N {
+                        let ptr = slice.as_mut_ptr() as *mut [T; $N];
+                        unsafe { Ok(&mut *ptr) }
+                    } else {
+                        Err(TryFromSliceError(()))
+                    }
                 }
             }
 

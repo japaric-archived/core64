@@ -110,11 +110,13 @@ use self::Ordering::*;
 pub trait PartialEq<Rhs: ?Sized = Self> {
     /// This method tests for `self` and `other` values to be equal, and is used
     /// by `==`.
+    #[must_use]
     #[stable(feature = "rust1", since = "1.0.0")]
     fn eq(&self, other: &Rhs) -> bool;
 
     /// This method tests for `!=`.
     #[inline]
+    #[must_use]
     #[stable(feature = "rust1", since = "1.0.0")]
     fn ne(&self, other: &Rhs) -> bool { !self.eq(other) }
 }
@@ -160,15 +162,15 @@ pub trait PartialEq<Rhs: ?Sized = Self> {
 /// ```
 #[stable(feature = "rust1", since = "1.0.0")]
 pub trait Eq: PartialEq<Self> {
-    // FIXME #13101: this method is used solely by #[deriving] to
-    // assert that every component of a type implements #[deriving]
+    // this method is used solely by #[deriving] to assert
+    // that every component of a type implements #[deriving]
     // itself, the current deriving infrastructure means doing this
     // assertion without using a method on this trait is nearly
     // impossible.
     //
     // This should never be implemented by hand.
     #[doc(hidden)]
-    #[inline(always)]
+    #[inline]
     #[stable(feature = "rust1", since = "1.0.0")]
     fn assert_receiver_is_total_eq(&self) {}
 }
@@ -335,7 +337,6 @@ impl Ordering {
 /// Example usage:
 ///
 /// ```
-/// #![feature(reverse_cmp_key)]
 /// use std::cmp::Reverse;
 ///
 /// let mut v = vec![1, 2, 3, 4, 5, 6];
@@ -343,10 +344,10 @@ impl Ordering {
 /// assert_eq!(v, vec![3, 2, 1, 6, 5, 4]);
 /// ```
 #[derive(PartialEq, Eq, Debug)]
-#[unstable(feature = "reverse_cmp_key", issue = "40893")]
-pub struct Reverse<T>(pub T);
+#[stable(feature = "reverse_cmp_key", since = "1.19.0")]
+pub struct Reverse<T>(#[stable(feature = "reverse_cmp_key", since = "1.19.0")] pub T);
 
-#[unstable(feature = "reverse_cmp_key", issue = "40893")]
+#[stable(feature = "reverse_cmp_key", since = "1.19.0")]
 impl<T: PartialOrd> PartialOrd for Reverse<T> {
     #[inline]
     fn partial_cmp(&self, other: &Reverse<T>) -> Option<Ordering> {
@@ -363,7 +364,7 @@ impl<T: PartialOrd> PartialOrd for Reverse<T> {
     fn gt(&self, other: &Self) -> bool { other.0 > self.0 }
 }
 
-#[unstable(feature = "reverse_cmp_key", issue = "40893")]
+#[stable(feature = "reverse_cmp_key", since = "1.19.0")]
 impl<T: Ord> Ord for Reverse<T> {
     #[inline]
     fn cmp(&self, other: &Reverse<T>) -> Ordering {
@@ -380,8 +381,9 @@ impl<T: Ord> Ord for Reverse<T> {
 ///
 /// ## Derivable
 ///
-/// This trait can be used with `#[derive]`. When `derive`d, it will produce a lexicographic
-/// ordering based on the top-to-bottom declaration order of the struct's members.
+/// This trait can be used with `#[derive]`. When `derive`d on structs, it will produce a
+/// lexicographic ordering based on the top-to-bottom declaration order of the struct's members.
+/// When `derive`d on enums, variants are ordered by their top-to-bottom declaration order.
 ///
 /// ## How can I implement `Ord`?
 ///
@@ -443,6 +445,38 @@ pub trait Ord: Eq + PartialOrd<Self> {
     /// ```
     #[stable(feature = "rust1", since = "1.0.0")]
     fn cmp(&self, other: &Self) -> Ordering;
+
+    /// Compares and returns the maximum of two values.
+    ///
+    /// Returns the second argument if the comparison determines them to be equal.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// assert_eq!(2, 1.max(2));
+    /// assert_eq!(2, 2.max(2));
+    /// ```
+    #[stable(feature = "ord_max_min", since = "1.21.0")]
+    fn max(self, other: Self) -> Self
+    where Self: Sized {
+        if other >= self { other } else { self }
+    }
+
+    /// Compares and returns the minimum of two values.
+    ///
+    /// Returns the first argument if the comparison determines them to be equal.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// assert_eq!(1, 1.min(2));
+    /// assert_eq!(2, 2.min(2));
+    /// ```
+    #[stable(feature = "ord_max_min", since = "1.21.0")]
+    fn min(self, other: Self) -> Self
+    where Self: Sized {
+        if self <= other { self } else { other }
+    }
 }
 
 #[stable(feature = "rust1", since = "1.0.0")]
@@ -477,8 +511,9 @@ impl PartialOrd for Ordering {
 ///
 /// ## Derivable
 ///
-/// This trait can be used with `#[derive]`. When `derive`d, it will produce a lexicographic
-/// ordering based on the top-to-bottom declaration order of the struct's members.
+/// This trait can be used with `#[derive]`. When `derive`d on structs, it will produce a
+/// lexicographic ordering based on the top-to-bottom declaration order of the struct's members.
+/// When `derive`d on enums, variants are ordered by their top-to-bottom declaration order.
 ///
 /// ## How can I implement `PartialOrd`?
 ///
@@ -588,6 +623,7 @@ pub trait PartialOrd<Rhs: ?Sized = Self>: PartialEq<Rhs> {
     /// let result = std::f64::NAN.partial_cmp(&1.0);
     /// assert_eq!(result, None);
     /// ```
+    #[must_use]
     #[stable(feature = "rust1", since = "1.0.0")]
     fn partial_cmp(&self, other: &Rhs) -> Option<Ordering>;
 
@@ -603,6 +639,7 @@ pub trait PartialOrd<Rhs: ?Sized = Self>: PartialEq<Rhs> {
     /// assert_eq!(result, false);
     /// ```
     #[inline]
+    #[must_use]
     #[stable(feature = "rust1", since = "1.0.0")]
     fn lt(&self, other: &Rhs) -> bool {
         match self.partial_cmp(other) {
@@ -624,6 +661,7 @@ pub trait PartialOrd<Rhs: ?Sized = Self>: PartialEq<Rhs> {
     /// assert_eq!(result, true);
     /// ```
     #[inline]
+    #[must_use]
     #[stable(feature = "rust1", since = "1.0.0")]
     fn le(&self, other: &Rhs) -> bool {
         match self.partial_cmp(other) {
@@ -644,6 +682,7 @@ pub trait PartialOrd<Rhs: ?Sized = Self>: PartialEq<Rhs> {
     /// assert_eq!(result, false);
     /// ```
     #[inline]
+    #[must_use]
     #[stable(feature = "rust1", since = "1.0.0")]
     fn gt(&self, other: &Rhs) -> bool {
         match self.partial_cmp(other) {
@@ -665,6 +704,7 @@ pub trait PartialOrd<Rhs: ?Sized = Self>: PartialEq<Rhs> {
     /// assert_eq!(result, true);
     /// ```
     #[inline]
+    #[must_use]
     #[stable(feature = "rust1", since = "1.0.0")]
     fn ge(&self, other: &Rhs) -> bool {
         match self.partial_cmp(other) {
@@ -678,6 +718,8 @@ pub trait PartialOrd<Rhs: ?Sized = Self>: PartialEq<Rhs> {
 ///
 /// Returns the first argument if the comparison determines them to be equal.
 ///
+/// Internally uses an alias to `Ord::min`.
+///
 /// # Examples
 ///
 /// ```
@@ -689,12 +731,14 @@ pub trait PartialOrd<Rhs: ?Sized = Self>: PartialEq<Rhs> {
 #[inline]
 #[stable(feature = "rust1", since = "1.0.0")]
 pub fn min<T: Ord>(v1: T, v2: T) -> T {
-    if v1 <= v2 { v1 } else { v2 }
+    v1.min(v2)
 }
 
 /// Compares and returns the maximum of two values.
 ///
 /// Returns the second argument if the comparison determines them to be equal.
+///
+/// Internally uses an alias to `Ord::max`.
 ///
 /// # Examples
 ///
@@ -707,7 +751,7 @@ pub fn min<T: Ord>(v1: T, v2: T) -> T {
 #[inline]
 #[stable(feature = "rust1", since = "1.0.0")]
 pub fn max<T: Ord>(v1: T, v2: T) -> T {
-    if v2 >= v1 { v2 } else { v1 }
+    v1.max(v2)
 }
 
 // Implementation of PartialEq, Eq, PartialOrd and Ord for primitive types

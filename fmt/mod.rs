@@ -81,6 +81,22 @@ pub type Result = result::Result<(), Error>;
 /// This type does not support transmission of an error other than that an error
 /// occurred. Any extra information must be arranged to be transmitted through
 /// some other means.
+///
+/// An important thing to remember is that the type `fmt::Error` should not be
+/// confused with `std::io::Error` or `std::error::Error`, which you may also
+/// have in scope.
+///
+/// # Examples
+///
+/// ```rust
+/// use std::fmt::{self, write};
+///
+/// let mut output = String::new();
+/// match write(&mut output, format_args!("Hello {}!", "world")) {
+///     Err(fmt::Error) => panic!("An error occurred"),
+///     _ => (),
+/// }
+/// ```
 #[stable(feature = "rust1", since = "1.0.0")]
 #[derive(Copy, Clone, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Error;
@@ -306,7 +322,6 @@ impl<'a> ArgumentV1<'a> {
 
 // flags available in the v1 format of format_args
 #[derive(Copy, Clone)]
-#[allow(dead_code)] // SignMinus isn't currently used
 enum FlagV1 { SignPlus, SignMinus, Alternate, SignAwareZeroPad, }
 
 impl<'a> Arguments<'a> {
@@ -318,9 +333,9 @@ impl<'a> Arguments<'a> {
     pub fn new_v1(pieces: &'a [&'a str],
                   args: &'a [ArgumentV1<'a>]) -> Arguments<'a> {
         Arguments {
-            pieces: pieces,
+            pieces,
             fmt: None,
-            args: args
+            args,
         }
     }
 
@@ -337,9 +352,9 @@ impl<'a> Arguments<'a> {
                             args: &'a [ArgumentV1<'a>],
                             fmt: &'a [rt::v1::Argument]) -> Arguments<'a> {
         Arguments {
-            pieces: pieces,
+            pieces,
             fmt: Some(fmt),
-            args: args
+            args,
         }
     }
 
@@ -411,7 +426,7 @@ impl<'a> Display for Arguments<'a> {
     }
 }
 
-/// Format trait for the `?` character.
+/// `?` formatting.
 ///
 /// `Debug` should format the output in a programmer-facing, debugging context.
 ///
@@ -472,13 +487,14 @@ impl<'a> Display for Arguments<'a> {
 /// The origin is: Point { x: 0, y: 0 }
 /// ```
 ///
-/// There are a number of `debug_*` methods on `Formatter` to help you with manual
+/// There are a number of `debug_*` methods on [`Formatter`] to help you with manual
 /// implementations, such as [`debug_struct`][debug_struct].
 ///
 /// `Debug` implementations using either `derive` or the debug builder API
-/// on `Formatter` support pretty printing using the alternate flag: `{:#?}`.
+/// on [`Formatter`] support pretty printing using the alternate flag: `{:#?}`.
 ///
 /// [debug_struct]: ../../std/fmt/struct.Formatter.html#method.debug_struct
+/// [`Formatter`]: ../../std/fmt/struct.Formatter.html
 ///
 /// Pretty printing with `#?`:
 ///
@@ -576,7 +592,7 @@ pub trait Display {
     fn fmt(&self, f: &mut Formatter) -> Result;
 }
 
-/// Format trait for the `o` character.
+/// `o` formatting.
 ///
 /// The `Octal` trait should format its output as a number in base-8.
 ///
@@ -623,7 +639,7 @@ pub trait Octal {
     fn fmt(&self, f: &mut Formatter) -> Result;
 }
 
-/// Format trait for the `b` character.
+/// `b` formatting.
 ///
 /// The `Binary` trait should format its output as a number in binary.
 ///
@@ -670,7 +686,7 @@ pub trait Binary {
     fn fmt(&self, f: &mut Formatter) -> Result;
 }
 
-/// Format trait for the `x` character.
+/// `x` formatting.
 ///
 /// The `LowerHex` trait should format its output as a number in hexadecimal, with `a` through `f`
 /// in lower case.
@@ -718,7 +734,7 @@ pub trait LowerHex {
     fn fmt(&self, f: &mut Formatter) -> Result;
 }
 
-/// Format trait for the `X` character.
+/// `X` formatting.
 ///
 /// The `UpperHex` trait should format its output as a number in hexadecimal, with `A` through `F`
 /// in upper case.
@@ -766,7 +782,7 @@ pub trait UpperHex {
     fn fmt(&self, f: &mut Formatter) -> Result;
 }
 
-/// Format trait for the `p` character.
+/// `p` formatting.
 ///
 /// The `Pointer` trait should format its output as a memory location. This is commonly presented
 /// as hexadecimal.
@@ -811,7 +827,7 @@ pub trait Pointer {
     fn fmt(&self, f: &mut Formatter) -> Result;
 }
 
-/// Format trait for the `e` character.
+/// `e` formatting.
 ///
 /// The `LowerExp` trait should format its output in scientific notation with a lower-case `e`.
 ///
@@ -854,7 +870,7 @@ pub trait LowerExp {
     fn fmt(&self, f: &mut Formatter) -> Result;
 }
 
-/// Format trait for the `E` character.
+/// `E` formatting.
 ///
 /// The `UpperExp` trait should format its output in scientific notation with an upper-case `E`.
 ///
@@ -897,14 +913,11 @@ pub trait UpperExp {
     fn fmt(&self, f: &mut Formatter) -> Result;
 }
 
-/// The `write` function takes an output stream, a precompiled format string,
-/// and a list of arguments. The arguments will be formatted according to the
-/// specified format string into the output stream provided.
+/// The `write` function takes an output stream, and an `Arguments` struct
+/// that can be precompiled with the `format_args!` macro.
 ///
-/// # Arguments
-///
-///   * output - the buffer to write output to
-///   * args - the precompiled arguments generated by `format_args!`
+/// The arguments will be formatted according to the specified format string
+/// into the output stream provided.
 ///
 /// # Examples
 ///
@@ -1262,7 +1275,7 @@ impl<'a> Formatter<'a> {
         write(self.buf, fmt)
     }
 
-    /// Flags for formatting (packed version of rt::Flag)
+    /// Flags for formatting
     #[stable(feature = "rust1", since = "1.0.0")]
     pub fn flags(&self) -> u32 { self.flags }
 
@@ -1308,8 +1321,11 @@ impl<'a> Formatter<'a> {
         self.flags & (1 << FlagV1::SignAwareZeroPad as u32) != 0
     }
 
-    /// Creates a `DebugStruct` builder designed to assist with creation of
-    /// `fmt::Debug` implementations for structs.
+    /// Creates a [`DebugStruct`] builder designed to assist with creation of
+    /// [`fmt::Debug`] implementations for structs.
+    ///
+    /// [`DebugStruct`]: ../../std/fmt/struct.DebugStruct.html
+    /// [`fmt::Debug`]: ../../std/fmt/trait.Debug.html
     ///
     /// # Examples
     ///
@@ -1334,7 +1350,6 @@ impl<'a> Formatter<'a> {
     /// println!("{:?}", Foo { bar: 10, baz: "Hello World".to_string() });
     /// ```
     #[stable(feature = "debug_builders", since = "1.2.0")]
-    #[inline]
     pub fn debug_struct<'b>(&'b mut self, name: &str) -> DebugStruct<'b, 'a> {
         builders::debug_struct_new(self, name)
     }
@@ -1362,7 +1377,6 @@ impl<'a> Formatter<'a> {
     /// println!("{:?}", Foo(10, "Hello World".to_string()));
     /// ```
     #[stable(feature = "debug_builders", since = "1.2.0")]
-    #[inline]
     pub fn debug_tuple<'b>(&'b mut self, name: &str) -> DebugTuple<'b, 'a> {
         builders::debug_tuple_new(self, name)
     }
@@ -1387,7 +1401,6 @@ impl<'a> Formatter<'a> {
     /// println!("{:?}", Foo(vec![10, 11]));
     /// ```
     #[stable(feature = "debug_builders", since = "1.2.0")]
-    #[inline]
     pub fn debug_list<'b>(&'b mut self) -> DebugList<'b, 'a> {
         builders::debug_list_new(self)
     }
@@ -1412,7 +1425,6 @@ impl<'a> Formatter<'a> {
     /// println!("{:?}", Foo(vec![10, 11]));
     /// ```
     #[stable(feature = "debug_builders", since = "1.2.0")]
-    #[inline]
     pub fn debug_set<'b>(&'b mut self) -> DebugSet<'b, 'a> {
         builders::debug_set_new(self)
     }
@@ -1437,7 +1449,6 @@ impl<'a> Formatter<'a> {
     /// println!("{:?}", Foo(vec![("A".to_string(), 10), ("B".to_string(), 11)]));
     /// ```
     #[stable(feature = "debug_builders", since = "1.2.0")]
-    #[inline]
     pub fn debug_map<'b>(&'b mut self) -> DebugMap<'b, 'a> {
         builders::debug_map_new(self)
     }
@@ -1630,13 +1641,13 @@ macro_rules! tuple {
     () => ();
     ( $($name:ident,)+ ) => (
         #[stable(feature = "rust1", since = "1.0.0")]
-        impl<$($name:Debug),*> Debug for ($($name,)*) {
+        impl<$($name:Debug),*> Debug for ($($name,)*) where last_type!($($name,)+): ?Sized {
             #[allow(non_snake_case, unused_assignments, deprecated)]
             fn fmt(&self, f: &mut Formatter) -> Result {
                 let mut builder = f.debug_tuple("");
                 let ($(ref $name,)*) = *self;
                 $(
-                    builder.field($name);
+                    builder.field(&$name);
                 )*
 
                 builder.finish()
@@ -1644,6 +1655,11 @@ macro_rules! tuple {
         }
         peel! { $($name,)* }
     )
+}
+
+macro_rules! last_type {
+    ($a:ident,) => { $a };
+    ($a:ident, $($rest_a:ident,)+) => { last_type!($($rest_a,)+) };
 }
 
 tuple! { T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, }
@@ -1687,8 +1703,18 @@ impl<T: ?Sized + Debug> Debug for RefCell<T> {
                     .finish()
             }
             Err(_) => {
+                // The RefCell is mutably borrowed so we can't look at its value
+                // here. Show a placeholder instead.
+                struct BorrowedPlaceholder;
+
+                impl Debug for BorrowedPlaceholder {
+                    fn fmt(&self, f: &mut Formatter) -> Result {
+                        f.write_str("<borrowed>")
+                    }
+                }
+
                 f.debug_struct("RefCell")
-                    .field("value", &"<borrowed>")
+                    .field("value", &BorrowedPlaceholder)
                     .finish()
             }
         }
