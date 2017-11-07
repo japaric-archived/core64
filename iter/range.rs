@@ -144,6 +144,28 @@ macro_rules! step_impl_signed {
     )*)
 }
 
+#[cfg(not(target_pointer_width = "64"))]
+macro_rules! step_impl_no_between {
+    ($($t:ty)*) => ($(
+        #[unstable(feature = "step_trait",
+                   reason = "likely to be replaced by finer-grained traits",
+                   issue = "42168")]
+        impl Step for $t {
+            #[inline]
+            fn steps_between(_start: &Self, _end: &Self) -> Option<usize> {
+                None
+            }
+
+            #[inline]
+            fn add_usize(&self, n: usize) -> Option<Self> {
+                self.checked_add(n as $t)
+            }
+
+            step_identical_methods!();
+        }
+    )*)
+}
+
 step_impl_unsigned!(usize u8 u16 u32);
 step_impl_signed!([isize: usize] [i8: u8] [i16: u16] [i32: u32]);
 #[cfg(target_pointer_width = "64")]
