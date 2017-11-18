@@ -15,22 +15,59 @@ use rand::{Rng, XorShiftRng};
 
 #[test]
 fn test_binary_search() {
+    let b: [i32; 0] = [];
+    assert_eq!(b.binary_search(&5), Err(0));
+
+    let b = [4];
+    assert_eq!(b.binary_search(&3), Err(0));
+    assert_eq!(b.binary_search(&4), Ok(0));
+    assert_eq!(b.binary_search(&5), Err(1));
+
     let b = [1, 2, 4, 6, 8, 9];
-    assert!(b.binary_search_by(|v| v.cmp(&6)) == Ok(3));
-    assert!(b.binary_search_by(|v| v.cmp(&5)) == Err(3));
-    let b = [1, 2, 4, 6, 7, 8, 9];
-    assert!(b.binary_search_by(|v| v.cmp(&6)) == Ok(3));
-    assert!(b.binary_search_by(|v| v.cmp(&5)) == Err(3));
-    let b = [1, 2, 4, 6, 8, 9];
-    assert!(b.binary_search_by(|v| v.cmp(&8)) == Ok(4));
-    assert!(b.binary_search_by(|v| v.cmp(&7)) == Err(4));
-    let b = [1, 2, 4, 6, 7, 8, 9];
-    assert!(b.binary_search_by(|v| v.cmp(&8)) == Ok(5));
-    let b = [1, 2, 4, 5, 6, 8, 9];
-    assert!(b.binary_search_by(|v| v.cmp(&7)) == Err(5));
-    assert!(b.binary_search_by(|v| v.cmp(&0)) == Err(0));
+    assert_eq!(b.binary_search(&5), Err(3));
+    assert_eq!(b.binary_search(&6), Ok(3));
+    assert_eq!(b.binary_search(&7), Err(4));
+    assert_eq!(b.binary_search(&8), Ok(4));
+
     let b = [1, 2, 4, 5, 6, 8];
-    assert!(b.binary_search_by(|v| v.cmp(&9)) == Err(6));
+    assert_eq!(b.binary_search(&9), Err(6));
+
+    let b = [1, 2, 4, 6, 7, 8, 9];
+    assert_eq!(b.binary_search(&6), Ok(3));
+    assert_eq!(b.binary_search(&5), Err(3));
+    assert_eq!(b.binary_search(&8), Ok(5));
+
+    let b = [1, 2, 4, 5, 6, 8, 9];
+    assert_eq!(b.binary_search(&7), Err(5));
+    assert_eq!(b.binary_search(&0), Err(0));
+
+    let b = [1, 3, 3, 3, 7];
+    assert_eq!(b.binary_search(&0), Err(0));
+    assert_eq!(b.binary_search(&1), Ok(0));
+    assert_eq!(b.binary_search(&2), Err(1));
+    assert!(match b.binary_search(&3) { Ok(1...3) => true, _ => false });
+    assert!(match b.binary_search(&3) { Ok(1...3) => true, _ => false });
+    assert_eq!(b.binary_search(&4), Err(4));
+    assert_eq!(b.binary_search(&5), Err(4));
+    assert_eq!(b.binary_search(&6), Err(4));
+    assert_eq!(b.binary_search(&7), Ok(4));
+    assert_eq!(b.binary_search(&8), Err(5));
+}
+
+#[test]
+// Test implementation specific behavior when finding equivalent elements.
+// It is ok to break this test but when you do a crater run is highly advisable.
+fn test_binary_search_implementation_details() {
+    let b = [1, 1, 2, 2, 3, 3, 3];
+    assert_eq!(b.binary_search(&1), Ok(1));
+    assert_eq!(b.binary_search(&2), Ok(3));
+    assert_eq!(b.binary_search(&3), Ok(6));
+    let b = [1, 1, 1, 1, 1, 3, 3, 3, 3];
+    assert_eq!(b.binary_search(&1), Ok(4));
+    assert_eq!(b.binary_search(&3), Ok(8));
+    let b = [1, 1, 1, 1, 3, 3, 3, 3, 3];
+    assert_eq!(b.binary_search(&1), Ok(3));
+    assert_eq!(b.binary_search(&3), Ok(8));
 }
 
 #[test]
@@ -236,6 +273,23 @@ fn test_find_rfind() {
     }
     assert_eq!(i, 0);
     assert_eq!(v.iter().rfind(|&&x| x <= 3), Some(&3));
+}
+
+#[test]
+fn test_iter_folds() {
+    let a = [1, 2, 3, 4, 5]; // len>4 so the unroll is used
+    assert_eq!(a.iter().fold(0, |acc, &x| 2*acc + x), 57);
+    assert_eq!(a.iter().rfold(0, |acc, &x| 2*acc + x), 129);
+    let fold = |acc: i32, &x| acc.checked_mul(2)?.checked_add(x);
+    assert_eq!(a.iter().try_fold(0, &fold), Some(57));
+    assert_eq!(a.iter().try_rfold(0, &fold), Some(129));
+
+    // short-circuiting try_fold, through other methods
+    let a = [0, 1, 2, 3, 5, 5, 5, 7, 8, 9];
+    let mut iter = a.iter();
+    assert_eq!(iter.position(|&x| x == 3), Some(3));
+    assert_eq!(iter.rfind(|&&x| x == 5), Some(&5));
+    assert_eq!(iter.len(), 2);
 }
 
 #[test]
